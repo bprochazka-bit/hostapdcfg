@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hostapd Configurator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --surface2: #1a2330;
+    --surface3: #1f2d3d;
+    --border: #253245;
+    --accent: #00d4ff;
+    --accent2: #00ff88;
+    --accent3: #ff6b35;
+    --warn: #ffb347;
+    --text: #c9d8e8;
+    --text-dim: #637080;
+    --text-bright: #e8f4ff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  header h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+  }
+  header p {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+  .header-badge {
+    margin-left: auto;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent);
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+
+  /* ── Main layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    flex: 1;
+    gap: 0;
+    height: calc(100vh - 73px);
+  }
+
+  /* ── Left panel (form) ── */
+  .panel-left {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── Right panel (output) ── */
+  .panel-right {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .output-header {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .output-header h2 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .output-actions { display: flex; gap: 8px; }
+  .btn-copy, .btn-dl {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 600;
+  }
+  .btn-copy {
+    background: rgba(0,212,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.3);
+  }
+  .btn-copy:hover { background: rgba(0,212,255,0.25); }
+  .btn-dl {
+    background: rgba(0,255,136,0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(0,255,136,0.3);
+  }
+  .btn-dl:hover { background: rgba(0,255,136,0.25); }
+
+  #config-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    white-space: pre;
+    color: #9db8cc;
+    background: var(--bg);
+  }
+  /* Syntax highlighting via spans */
+  #config-output .co { color: #3d5a75; }   /* comment */
+  #config-output .kw { color: var(--accent); font-weight: 600; }  /* key */
+  #config-output .vl { color: var(--accent2); }   /* value */
+  #config-output .hd { color: var(--accent3); font-weight: 600; }  /* section header */
+
+  /* ── Section ── */
+  .section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 12px 16px;
+    background: var(--surface3);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-header .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .section-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── Form elements ── */
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  label span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  label span.hint {
+    font-size: 0.7rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #445566;
+    font-weight: 400;
+    margin-top: 3px;
+  }
+
+  input[type=text], input[type=number], input[type=password], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+  }
+  select option { background: var(--surface2); }
+
+  /* Inline two-column row */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .toggle-label { font-size: 0.8rem; color: var(--text); }
+  .toggle-desc { font-size: 0.7rem; color: var(--text-dim); }
+  .toggle {
+    position: relative;
+    width: 40px; height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle input { display: none; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .slider:before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: 0.2s;
+  }
+  input:checked + .slider { background: rgba(0,212,255,0.2); border-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(18px); background: var(--accent); }
+
+  /* ── Interface card ── */
+  .iface-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .iface-card:hover { border-color: var(--accent); }
+  .iface-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .iface-name { font-family: var(--mono); font-size: 0.9rem; color: var(--text-bright); font-weight: 600; }
+  .iface-driver { font-size: 0.72rem; color: var(--text-dim); }
+  .iface-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .badge-wifi { background: rgba(0,212,255,0.15); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
+  .badge-band { background: rgba(0,255,136,0.12); color: var(--accent2); border: 1px solid rgba(0,255,136,0.25); }
+  .badge-noap { background: rgba(255,107,53,0.15); color: var(--accent3); border: 1px solid rgba(255,107,53,0.3); }
+
+  .no-ifaces {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  /* ── Generate button ── */
+  .btn-generate {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 8px;
+    color: #000;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn-generate:hover { opacity: 0.9; }
+  .btn-generate:active { transform: scale(0.99); }
+
+  .btn-refresh {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-refresh:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Notification ── */
+  #notif {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface3);
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 10px 18px;
+    border-radius: 8px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  #notif.show { opacity: 1; transform: translateY(0); }
+
+  /* ── Capability pills ── */
+  .cap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .cap-pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cap-pill .icon { font-size: 0.9rem; }
+  .cap-pill .cap-label { color: var(--text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .cap-pill .cap-val { color: var(--text-bright); font-family: var(--mono); font-size: 0.72rem; }
+  .cap-pill.ok .icon { color: var(--accent2); }
+  .cap-pill.warn .icon { color: var(--warn); }
+  .cap-pill.na .icon { color: var(--text-dim); }
+
+  /* ── Warning banners ── */
+  #warnings-area {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .warn-banner {
+    background: #1a1400;
+    border-left: 3px solid var(--warn);
+    border-bottom: 1px solid #2a2000;
+    padding: 10px 14px 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideDown 0.18s ease;
+  }
+  .warn-banner.info {
+    background: #0d1a14;
+    border-left-color: var(--accent2);
+  }
+  @keyframes slideDown {
+    from { opacity:0; transform: translateY(-6px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .warn-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+  .warn-body { flex: 1; min-width: 0; }
+  .warn-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--warn);
+    margin-bottom: 2px;
+  }
+  .warn-banner.info .warn-title { color: var(--accent2); }
+  .warn-msg {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .warn-msg strong { color: var(--text); }
+  .warn-actions { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+  .btn-undo {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(255,179,71,0.12);
+    color: var(--warn);
+    border: 1px solid rgba(255,179,71,0.3);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-undo:hover { background: rgba(255,179,71,0.22); }
+  .btn-dismiss {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .btn-dismiss:hover { color: var(--text); }
+  .warn-field-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    background: rgba(255,179,71,0.1);
+    color: var(--warn);
+    border: 1px solid rgba(255,179,71,0.25);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin: 0 2px;
+  }
+  .warn-banner.info .warn-field-chip {
+    background: rgba(0,255,136,0.08);
+    color: var(--accent2);
+    border-color: rgba(0,255,136,0.2);
+  }
+
+  /* ── Config annotation syntax ── */
+  #config-output .an-user    { color: #4a9eff; }   /* user selected */
+  #config-output .an-auto    { color: var(--warn); font-style: italic; }  /* auto-adjusted */
+  #config-output .an-derived { color: #4a6070; font-style: italic; }      /* derived */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">📡</div>
+  <div>
+    <h1>hostapd Configurator</h1>
+    <p>Generate driver-aware hostapd.conf for Linux access points</p>
+  </div>
+  <div class="header-badge">Debian 13 · nl80211</div>
+</header>
+
+<main>
+  <!-- ── LEFT PANEL ── -->
+  <div class="panel-left">
+
+    <!-- Interfaces -->
+    <div class="section">
+      <div class="section-header">
+        <div class="dot"></div>
+        Wireless Interfaces
+        <button class="btn-refresh" onclick="loadInterfaces()" style="margin-left:auto">↺ Refresh</button>
+      </div>
+      <div class="section-body" id="iface-list">
+        <div class="no-ifaces">Scanning for interfaces…</div>
+      </div>
+    </div>
+
+    <!-- Detected capabilities -->
+    <div class="section" id="cap-section" style="display:none">
+      <div class="section-header"><div class="dot" style="background:var(--accent2)"></div>Detected Capabilities</div>
+      <div class="section-body">
+        <div class="cap-grid" id="cap-grid"></div>
+      </div>
+    </div>
+
+    <!-- Network -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:var(--accent3)"></div>Network Settings</div>
+      <div class="section-body">
+        <label><span>SSID</span><input type="text" id="ssid" value="MyAccessPoint" maxlength="32"></label>
+        <div class="row2">
+          <label><span>Band</span>
+            <select id="band" onchange="onBandChange()">
+              <option value="2.4GHz">2.4 GHz</option>
+              <option value="5GHz" selected>5 GHz</option>
+              <option value="6GHz">6 GHz</option>
+            </select>
+          </label>
+          <label><span>Channel</span>
+            <select id="channel"></select>
+          </label>
+        </div>
+        <div class="row2">
+          <label><span>Channel Width</span>
+            <select id="channel_width" onchange="onWidthChange()">
+              <option value="20">20 MHz</option>
+              <option value="40">40 MHz</option>
+              <option value="80" selected>80 MHz</option>
+              <option value="160">160 MHz</option>
+            </select>
+          </label>
+          <label><span>WiFi Gen</span>
+            <select id="wifi_gen">
+              <option value="4">WiFi 4 (802.11n)</option>
+              <option value="5">WiFi 5 (802.11ac)</option>
+              <option value="6">WiFi 6 (802.11ax)</option>
+              <option value="7">WiFi 7 (802.11be)</option>
+            </select>
+          </label>
+        </div>
+        <label><span>Country Code</span><input type="text" id="country" value="US" maxlength="2" style="text-transform:uppercase"></label>
+        <label><span>Bridge Interface <em style="font-weight:300;text-transform:none">(optional)</em></span>
+          <input type="text" id="bridge" placeholder="br0 — leave blank for no bridge">
+        </label>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:var(--warn)"></div>Security</div>
+      <div class="section-body">
+        <label><span>Mode</span>
+          <select id="security" onchange="onSecurityChange()">
+            <option value="wpa2">WPA2-PSK (AES)</option>
+            <option value="wpa3-transition">WPA3-SAE Transition (WPA2+WPA3)</option>
+            <option value="wpa3">WPA3-SAE Only</option>
+            <option value="open">Open (no auth)</option>
+          </select>
+        </label>
+        <label id="pw-label"><span>Passphrase</span>
+          <input type="password" id="passphrase" value="MySecurePass1234" minlength="8" maxlength="63">
+          <span class="hint">8–63 characters</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- hostapd Backend -->
+    <div class="section" id="backend-section">
+      <div class="section-header"><div class="dot" style="background:#cc44ff"></div>hostapd Backend</div>
+      <div class="section-body">
+        <label><span>Backend binary</span>
+          <select id="backend" onchange="onBackendChange()"></select>
+        </label>
+        <div id="backend-desc" style="font-size:0.72rem;color:var(--text-dim);line-height:1.55;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          Select a backend above.
+        </div>
+        <div id="backend-build" style="display:none">
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Build instructions</div>
+          <pre id="backend-build-code" style="font-family:var(--mono);font-size:0.68rem;color:#9db8cc;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:6px;border:1px solid var(--border)"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:#9966ff"></div>Advanced</div>
+      <div class="section-body">
+        <div class="row2">
+          <label><span>Beacon Interval</span><input type="number" id="beacon_int" value="100" min="15" max="1000"><span class="hint">TUs (100 = 102.4 ms)</span></label>
+          <label><span>DTIM Period</span><input type="number" id="dtim_period" value="2" min="1" max="255"></label>
+        </div>
+        <div class="row2">
+          <label><span>Max Stations</span><input type="number" id="max_stations" value="32" min="1" max="255"></label>
+          <label><span>HE BSS Color</span><input type="number" id="he_bss_color" value="37" min="1" max="63"><span class="hint">WiFi 6 spatial reuse</span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Hidden SSID</div>
+            <div class="toggle-desc">Do not broadcast network name</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="hidden"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Enable DFS (5 GHz)</div>
+            <div class="toggle-desc">Allow radar-protected channels — requires ieee80211h</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="enable_dfs"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-generate" onclick="generate()">⚡ Generate hostapd.conf</button>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="panel-right">
+    <div id="warnings-area"></div>
+    <div class="output-header">
+      <h2>hostapd.conf Output</h2>
+      <div class="output-actions">
+        <button class="btn-copy" onclick="copyConfig()">⧉ Copy</button>
+        <button class="btn-dl" onclick="downloadConfig()">↓ Download</button>
+      </div>
+    </div>
+    <pre id="config-output"><span class="co"># Select an interface on the left and click Generate.</span></pre>
+  </div>
+</main>
+
+<div id="notif"></div>
+
+<script>
+let interfaces = [];
+let selectedIface = null;
+let currentConfig = '';
+let backends = {};
+
+// ── Undo / warning state ─────────────────────────────────────────────────────
+// undoStack: array of { change, prevFormState }
+// prevFormState is a snapshot of form fields before the auto-adjustment
+let undoStack = [];
+let dismissedIds = new Set();  // IDs of warnings the user has dismissed
+
+// Capture current form state as a plain object
+function snapshotForm() {
+  return {
+    band:          document.getElementById('band').value,
+    channel:       document.getElementById('channel').value,
+    channel_width: document.getElementById('channel_width').value,
+    wifi_gen:      document.getElementById('wifi_gen').value,
+    security:      document.getElementById('security').value,
+    he_bss_color:  document.getElementById('he_bss_color').value,
+    backend:       document.getElementById('backend').value,
+  };
+}
+
+// Apply a form snapshot (used by undo)
+function applySnapshot(snap) {
+  if (snap.band)          document.getElementById('band').value = snap.band;
+  if (snap.channel_width) document.getElementById('channel_width').value = snap.channel_width;
+  if (snap.wifi_gen)      document.getElementById('wifi_gen').value = snap.wifi_gen;
+  if (snap.security)      document.getElementById('security').value = snap.security;
+  if (snap.he_bss_color)  document.getElementById('he_bss_color').value = snap.he_bss_color;
+  if (snap.backend)       document.getElementById('backend').value = snap.backend;
+  if (snap.band)          onBandChange().then(() => {
+    if (snap.channel) document.getElementById('channel').value = snap.channel;
+  });
+  onSecurityChange();
+  onBackendChange();
+}
+
+// Field display names for warning UI
+const FIELD_LABELS = {
+  wifi_gen:      'WiFi Generation',
+  band:          'Band',
+  channel:       'Channel',
+  channel_width: 'Channel Width',
+  security:      'Security Mode',
+  he_bss_color:  'HE BSS Color',
+  backend:       'hostapd Backend',
+  driver:        'Driver',
+};
+
+function fieldLabel(k) { return FIELD_LABELS[k] || k; }
+
+// ── Warning banner rendering ─────────────────────────────────────────────────
+function renderWarnings(changes) {
+  const area = document.getElementById('warnings-area');
+  area.innerHTML = '';
+
+  // Filter to only non-dismissed changes that modified a value
+  const visible = changes.filter(ch =>
+    ch.from_val !== ch.to_val && !dismissedIds.has(warningId(ch))
+  );
+
+  for (const ch of visible) {
+    const id = warningId(ch);
+    const isWarn = ch.severity === 'warning';
+    const div = document.createElement('div');
+    div.className = 'warn-banner' + (isWarn ? '' : ' info');
+    div.dataset.wid = id;
+
+    div.innerHTML = `
+      <div class="warn-icon">${isWarn ? '⚠' : 'ℹ'}</div>
+      <div class="warn-body">
+        <div class="warn-title">
+          ${isWarn ? 'Auto-adjusted:' : 'Auto-set:'}
+          <span class="warn-field-chip">${fieldLabel(ch.field)}</span>
+          changed from <span class="warn-field-chip">${esc(ch.from_val)}</span>
+          to <span class="warn-field-chip">${esc(ch.to_val)}</span>
+        </div>
+        <div class="warn-msg">
+          <strong>Why:</strong> ${esc(ch.reason)}
+          <br><strong>Triggered by:</strong>
+          <span class="warn-field-chip">${fieldLabel(ch.cause_field)}</span> = <span class="warn-field-chip">${esc(ch.cause_val)}</span>
+        </div>
+        <div class="warn-actions">
+          ${isWarn ? `<button class="btn-undo" onclick="undoChange('${id}')">↩ Undo this change</button>` : ''}
+          <button class="btn-dismiss" onclick="dismissWarning('${id}')">Dismiss</button>
+        </div>
+      </div>
+    `;
+    area.appendChild(div);
+  }
+}
+
+function warningId(ch) {
+  return `${ch.field}:${ch.from_val}:${ch.to_val}:${ch.cause_field}`;
+}
+
+function dismissWarning(id) {
+  dismissedIds.add(id);
+  const el = document.querySelector(`[data-wid="${id}"]`);
+  if (el) el.remove();
+}
+
+function undoChange(id) {
+  // Find the undo entry for this warning
+  const entry = undoStack.find(e => warningId(e.change) === id);
+  if (entry) {
+    applySnapshot(entry.prevFormState);
+    dismissedIds.add(id);  // dismiss the warning after undo
+    const el = document.querySelector(`[data-wid="${id}"]`);
+    if (el) el.remove();
+    notify('↩ Reverted change to ' + fieldLabel(entry.change.field));
+    // Re-generate with undone params
+    generate();
+  }
+}
+
+// ── Config rendering with annotation syntax highlighting ────────────────────
+function renderConfig(text) {
+  const el = document.getElementById('config-output');
+  el.innerHTML = text.split('\n').map(line => {
+    // Section headers
+    if (line.startsWith('#####')) {
+      return `<span class="hd">${esc(line)}</span>`;
+    }
+    // Pure comment lines
+    if (line.trimStart().startsWith('#')) {
+      return `<span class="co">${esc(line)}</span>`;
+    }
+    if (!line.includes('=')) return esc(line);
+
+    // Split at first = to get key and rest
+    const eqIdx = line.indexOf('=');
+    const key = line.substring(0, eqIdx);
+    const rest = line.substring(eqIdx + 1);
+
+    // Detect annotation: "  # ← ..."
+    const annMatch = rest.match(/^(.*?)(  # ← .*)$/);
+    let valPart, annPart;
+    if (annMatch) {
+      valPart = annMatch[1];
+      annPart = annMatch[2];
+    } else {
+      valPart = rest;
+      annPart = '';
+    }
+
+    let annHtml = '';
+    if (annPart) {
+      if (annPart.includes('AUTO-ADJUSTED')) {
+        annHtml = `<span class="an-auto">${esc(annPart)}</span>`;
+      } else if (annPart.includes('user selected')) {
+        annHtml = `<span class="an-user">${esc(annPart)}</span>`;
+      } else if (annPart.includes('derived')) {
+        annHtml = `<span class="an-derived">${esc(annPart)}</span>`;
+      } else {
+        annHtml = `<span class="co">${esc(annPart)}</span>`;
+      }
+    }
+
+    return `<span class="kw">${esc(key)}</span>=<span class="vl">${esc(valPart)}</span>${annHtml}`;
+  }).join('\n');
+}
+
+// ── Form helpers ─────────────────────────────────────────────────────────────
+async function loadInterfaces() {
+  const list = document.getElementById('iface-list');
+  list.innerHTML = '<div class="no-ifaces">Scanning…</div>';
+  try {
+    const res = await fetch('/api/interfaces');
+    interfaces = await res.json();
+    renderInterfaces();
+  } catch(e) {
+    list.innerHTML = '<div class="no-ifaces">⚠ Could not enumerate interfaces.<br>Run with sudo for full access.</div>';
+  }
+}
+
+function renderInterfaces() {
+  const list = document.getElementById('iface-list');
+  if (!interfaces.length) {
+    list.innerHTML = '<div class="no-ifaces">No wireless interfaces found.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const iface of interfaces) {
+    const cap = iface.capabilities;
+    const wifiGen = cap.wifi_gen || 4;
+    const apOk = iface.ap_support;
+    const busColor = iface.bus_type === 'pcie' ? '#9966ff' : iface.bus_type === 'usb' ? 'var(--accent)' : 'var(--text-dim)';
+    const busLabel = (iface.bus_type || 'unknown').toUpperCase();
+    const larWarn = iface.iwlwifi_lar ? '<span class="badge badge-noap">LAR ⚠</span>' : '';
+    const div = document.createElement('div');
+    div.className = 'iface-card';
+    div.dataset.iface = iface.interface;
+    div.innerHTML = `
+      <div class="iface-name">${iface.interface}</div>
+      <div class="iface-driver">${iface.driver_label}</div>
+      <div class="iface-badges">
+        <span class="badge" style="background:rgba(128,128,255,0.12);color:${busColor};border:1px solid ${busColor}44">${busLabel}</span>
+        <span class="badge badge-wifi">WiFi ${wifiGen}</span>
+        ${(iface.bands||[]).map(b => `<span class="badge badge-band">${b}</span>`).join('')}
+        ${!apOk ? '<span class="badge badge-noap">AP ⚠</span>' : ''}
+        ${larWarn}
+      </div>
+    `;
+    div.onclick = () => selectIface(iface);
+    list.appendChild(div);
+  }
+  if (interfaces.length) selectIface(interfaces[0]);
+}
+
+function selectIface(iface) {
+  selectedIface = iface;
+  document.querySelectorAll('.iface-card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`.iface-card[data-iface="${iface.interface}"]`);
+  if (card) card.classList.add('selected');
+
+  const recBackend = iface.recommended_backend || 'debian';
+  const backendSel = document.getElementById('backend');
+  if (backendSel) backendSel.value = recBackend;
+  onBackendChange();
+
+  // Update cap grid
+  const cap = iface.capabilities;
+  const grid = document.getElementById('cap-grid');
+  document.getElementById('cap-section').style.display = 'block';
+  const wifiGen = cap.wifi_gen || 4;
+  const maxW = cap.max_channel_width || 20;
+  const hasHE = !!cap.he_capab;
+  const hasVHT = !!cap.vht_capab;
+  const hasDFS = !!cap.dfs;
+  const busType = (iface.bus_type || 'unknown').toUpperCase();
+  const hasLAR = !!cap.iwlwifi_lar;
+
+  grid.innerHTML = `
+    <div class="cap-pill ok"><span class="icon">📶</span><div><div class="cap-label">WiFi Gen</div><div class="cap-val">WiFi ${wifiGen}</div></div></div>
+    <div class="cap-pill ok"><span class="icon">🔌</span><div><div class="cap-label">Bus Type</div><div class="cap-val">${busType}</div></div></div>
+    <div class="cap-pill ${maxW>=80?'ok':'warn'}"><span class="icon">↔</span><div><div class="cap-label">Max Width</div><div class="cap-val">${maxW} MHz</div></div></div>
+    <div class="cap-pill ${hasHE?'ok':'na'}"><span class="icon">${hasHE?'✓':'✗'}</span><div><div class="cap-label">802.11ax (HE)</div><div class="cap-val">${hasHE?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasVHT?'ok':'na'}"><span class="icon">${hasVHT?'✓':'✗'}</span><div><div class="cap-label">802.11ac (VHT)</div><div class="cap-val">${hasVHT?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasDFS?'ok':'na'}"><span class="icon">${hasDFS?'✓':'✗'}</span><div><div class="cap-label">DFS Support</div><div class="cap-val">${hasDFS?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasLAR?'warn':'na'}"><span class="icon">${hasLAR?'⚠':'✓'}</span><div><div class="cap-label">Intel LAR</div><div class="cap-val">${hasLAR?'Active':'None'}</div></div></div>
+    <div class="cap-pill ok"><span class="icon">📻</span><div><div class="cap-label">Bands</div><div class="cap-val">${(iface.bands||['?']).join(', ')}</div></div></div>
+  `;
+  updateFormFromCap(cap, iface.bands || []);
+}
+
+function updateFormFromCap(cap, bands) {
+  const genSel = document.getElementById('wifi_gen');
+  const maxGen = cap.wifi_gen || 4;
+  Array.from(genSel.options).forEach(o => { o.disabled = parseInt(o.value) > maxGen; });
+  genSel.value = Math.min(maxGen, 6);
+
+  const widthSel = document.getElementById('channel_width');
+  const maxW = cap.max_channel_width || 20;
+  Array.from(widthSel.options).forEach(o => { o.disabled = parseInt(o.value) > maxW; });
+  const widths = [160,80,40,20].filter(w => w <= maxW);
+  widthSel.value = widths[0] || 20;
+
+  const bandSel = document.getElementById('band');
+  if (bands.includes('5GHz')) bandSel.value = '5GHz';
+  else if (bands.includes('6GHz')) bandSel.value = '6GHz';
+  else bandSel.value = '2.4GHz';
+  Array.from(bandSel.options).forEach(o => { o.disabled = !bands.includes(o.value); });
+
+  onBandChange();
+}
+
+async function onBandChange() {
+  const band = document.getElementById('band').value;
+  const isIwl = selectedIface && selectedIface.iwlwifi_lar;
+  const res = await fetch(`/api/channels?band=${band}&iwlwifi=${isIwl?'true':'false'}`);
+  const data = await res.json();
+  const chanSel = document.getElementById('channel');
+  chanSel.innerHTML = '';
+  for (const ch of data.channels) {
+    const opt = document.createElement('option');
+    opt.value = ch;
+    const isDfs = data.dfs_channels.includes(ch);
+    opt.textContent = `Ch ${ch}${isDfs?' (DFS)':''}`;
+    chanSel.appendChild(opt);
+  }
+  const defaults = {'2.4GHz':'6','5GHz':'36','6GHz':'1'};
+  chanSel.value = defaults[band] || chanSel.options[0]?.value;
+
+  const widthSel = document.getElementById('channel_width');
+  if (band === '2.4GHz') {
+    ['80','160'].forEach(v => {
+      const o = Array.from(widthSel.options).find(x=>x.value===v);
+      if(o) o.disabled = true;
+    });
+    if (parseInt(widthSel.value) > 40) widthSel.value = '40';
+  }
+}
+
+function onSecurityChange() {
+  const sec = document.getElementById('security').value;
+  document.getElementById('pw-label').style.display = sec === 'open' ? 'none' : 'flex';
+}
+
+async function loadBackends() {
+  try {
+    const res = await fetch('/api/backends');
+    backends = await res.json();
+    const sel = document.getElementById('backend');
+    sel.innerHTML = '';
+    for (const [key, b] of Object.entries(backends)) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = b.label + (b.available ? '' : ' ⚠ not found');
+      if (!b.available) opt.style.color = 'var(--warn)';
+      sel.appendChild(opt);
+    }
+    onBackendChange();
+  } catch(e) {}
+}
+
+function onBackendChange() {
+  const key = document.getElementById('backend').value;
+  const b = backends[key];
+  if (!b) return;
+  const desc = document.getElementById('backend-desc');
+  const buildDiv = document.getElementById('backend-build');
+  const buildCode = document.getElementById('backend-build-code');
+  desc.textContent = b.description || '';
+  desc.style.borderColor = b.available ? 'rgba(0,255,136,0.2)' : 'rgba(255,179,71,0.3)';
+  desc.style.color = b.available ? 'var(--text-dim)' : 'var(--warn)';
+  if (b.build_notes && !b.available) {
+    buildDiv.style.display = 'block';
+    buildCode.textContent = b.build_notes;
+  } else {
+    buildDiv.style.display = 'none';
+  }
+}
+
+// ── Main generate function ────────────────────────────────────────────────────
+async function generate() {
+  if (!selectedIface) { notify('⚠ Select an interface first'); return; }
+
+  // Snapshot the form state BEFORE we apply any changes (for undo)
+  const preSnap = snapshotForm();
+
+  const params = collectParams();
+
+  // Call generate (which also runs validate_and_resolve server-side)
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({...params, _orig: params})
+  });
+  const data = await res.json();
+  currentConfig = data.config;
+  const changes = data.changes || [];
+
+  // Build undo entries for each change that actually modified a user-set value
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      const id = warningId(ch);
+      // Only add if not already in undoStack for this id
+      if (!undoStack.find(e => warningId(e.change) === id)) {
+        undoStack.push({ change: ch, prevFormState: preSnap });
+      }
+    }
+  }
+
+  // Apply resolved values back to form (so the UI shows what was actually used)
+  applyResolvedToForm(data.changes || [], params);
+
+  // Clear dismissed state for any NEW changes
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      dismissedIds.delete(warningId(ch));
+    }
+  }
+
+  renderWarnings(changes);
+  renderConfig(currentConfig);
+}
+
+function collectParams() {
+  return {
+    interface:     selectedIface.interface,
+    driver:        selectedIface.driver,
+    ssid:          document.getElementById('ssid').value,
+    passphrase:    document.getElementById('passphrase').value,
+    band:          document.getElementById('band').value,
+    channel:       document.getElementById('channel').value,
+    channel_width: document.getElementById('channel_width').value,
+    wifi_gen:      document.getElementById('wifi_gen').value,
+    country:       document.getElementById('country').value.toUpperCase(),
+    bridge:        document.getElementById('bridge').value,
+    security:      document.getElementById('security').value,
+    hidden:        document.getElementById('hidden').checked,
+    max_stations:  document.getElementById('max_stations').value,
+    he_bss_color:  document.getElementById('he_bss_color').value,
+    beacon_int:    document.getElementById('beacon_int').value,
+    dtim_period:   document.getElementById('dtim_period').value,
+    enable_dfs:    document.getElementById('enable_dfs').checked,
+    backend:       document.getElementById('backend').value,
+  };
+}
+
+// Update form elements to reflect resolved values returned by the server
+function applyResolvedToForm(changes, origParams) {
+  // Map of field → resolved value from changes
+  const resolved = {};
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      resolved[ch.field] = ch.to_val;
+    }
+  }
+  if (resolved.wifi_gen)      document.getElementById('wifi_gen').value = resolved.wifi_gen;
+  if (resolved.channel_width) document.getElementById('channel_width').value = resolved.channel_width;
+  if (resolved.security) {
+    document.getElementById('security').value = resolved.security;
+    onSecurityChange();
+  }
+  if (resolved.he_bss_color)  document.getElementById('he_bss_color').value = resolved.he_bss_color;
+  if (resolved.backend) {
+    document.getElementById('backend').value = resolved.backend;
+    onBackendChange();
+  }
+  if (resolved.band) {
+    document.getElementById('band').value = resolved.band;
+    onBandChange().then(() => {
+      if (resolved.channel) document.getElementById('channel').value = resolved.channel;
+    });
+  } else if (resolved.channel) {
+    document.getElementById('channel').value = resolved.channel;
+  }
+}
+
+function warningId(ch) {
+  return `${ch.field}:${ch.from_val}:${ch.to_val}:${ch.cause_field}`;
+}
+
+function copyConfig() {
+  if (!currentConfig) return;
+  navigator.clipboard.writeText(currentConfig).then(() => notify('✓ Copied to clipboard'));
+}
+
+function downloadConfig() {
+  if (!currentConfig) return;
+  const blob = new Blob([currentConfig], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hostapd.conf';
+  a.click();
+  notify('↓ Downloading hostapd.conf');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let notifTimer;
+function notify(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Init
+loadInterfaces();
+loadBackends();
+onBandChange();
+</script>
+
+</body>
+</html>
+
