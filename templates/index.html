@@ -439,6 +439,72 @@
   }
   textarea:focus { outline: none; border-color: var(--accent); }
 
+  /* ── Vendor IE list rows ── */
+  .row3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 8px;
+  }
+  .ie-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ie-row .ie-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .ie-row .ie-byte-count {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    color: var(--text-dim);
+  }
+  .ie-row .ie-byte-count.err { color: var(--accent3); }
+  .btn-add {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--accent);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-add:hover { border-color: var(--accent); border-style: solid; }
+  .btn-remove {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 9px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-remove:hover { color: var(--accent3); border-color: var(--accent3); }
+  .ie-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent2);
+    word-break: break-all;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+  .ie-preview.empty { color: var(--text-dim); }
+
   .no-ifaces {
     padding: 24px;
     text-align: center;
@@ -886,10 +952,24 @@
         <details class="sub-section">
           <summary>Vendor-specific information elements<span class="sub-chev">▶</span></summary>
           <div class="sub-body">
-            <label><span>vendor_elements <em style="font-weight:300;text-transform:none">(hex string)</em></span>
-              <input type="text" id="vendor_elements" placeholder="dd05112233445566">
-              <span class="hint">Custom IEs appended to beacons / probe responses. Format: type+length+OUI+data, hex.</span>
-            </label>
+            <div class="hint" style="line-height:1.5">
+              Each IE is built as <code>dd</code> · length · OUI (3 bytes) · OUI type (1 byte) · data.
+              Add one or more entries below — the hex is generated automatically.
+            </div>
+            <div id="vendor-ie-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn-add" onclick="addVendorIE()">+ Add IE</button>
+              <button type="button" class="btn-add" onclick="toggleVendorRaw()" id="btn-raw-toggle">Use raw hex…</button>
+            </div>
+            <div id="vendor-raw-wrap" style="display:none">
+              <label style="margin-top:6px"><span>Raw <code>vendor_elements=</code> hex <em style="font-weight:300;text-transform:none">(overrides the structured list)</em></span>
+                <input type="text" id="vendor_elements_raw" placeholder="dd05112233445566" oninput="updateVendorPreview()">
+              </label>
+            </div>
+            <div id="vendor-ie-preview-wrap" style="display:none">
+              <div class="hint" style="margin-top:4px">Generated hex (sent as <code>vendor_elements=</code>):</div>
+              <pre id="vendor-ie-preview" class="ie-preview"></pre>
+            </div>
           </div>
         </details>
 
@@ -1441,6 +1521,157 @@ async function generate() {
   renderConfig(currentConfig);
 }
 
+// ── Vendor IE editor ─────────────────────────────────────────────────────────
+let _ieCounter = 0;
+
+function addVendorIE(seed) {
+  _ieCounter += 1;
+  const id = `ie${_ieCounter}`;
+  const list = document.getElementById('vendor-ie-list');
+  const row = document.createElement('div');
+  row.className = 'ie-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <div class="row3">
+      <label><span>OUI <em style="font-weight:300;text-transform:none">(3 bytes)</em></span>
+        <input type="text" class="ie-oui" placeholder="00:50:F2" maxlength="11" oninput="updateVendorPreview()">
+      </label>
+      <label><span>OUI Type</span>
+        <input type="text" class="ie-type" placeholder="04" maxlength="4" oninput="updateVendorPreview()">
+      </label>
+      <label><span>Data format</span>
+        <select class="ie-fmt" onchange="updateVendorPreview()">
+          <option value="hex">Hex</option>
+          <option value="text">Text (UTF-8)</option>
+        </select>
+      </label>
+    </div>
+    <label><span>Data</span>
+      <input type="text" class="ie-data" placeholder="01020304 or any hex/text" oninput="updateVendorPreview()">
+    </label>
+    <div class="ie-actions">
+      <span class="ie-byte-count">— bytes</span>
+      <button type="button" class="btn-remove" onclick="removeVendorIE('${id}')">Remove</button>
+    </div>
+  `;
+  list.appendChild(row);
+  if (seed) {
+    if (seed.oui)  row.querySelector('.ie-oui').value  = seed.oui;
+    if (seed.type) row.querySelector('.ie-type').value = seed.type;
+    if (seed.fmt)  row.querySelector('.ie-fmt').value  = seed.fmt;
+    if (seed.data) row.querySelector('.ie-data').value = seed.data;
+  }
+  updateVendorPreview();
+}
+
+function removeVendorIE(id) {
+  const row = document.querySelector(`.ie-row[data-id="${id}"]`);
+  if (row) row.remove();
+  updateVendorPreview();
+}
+
+function toggleVendorRaw() {
+  const wrap = document.getElementById('vendor-raw-wrap');
+  const btn  = document.getElementById('btn-raw-toggle');
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : '';
+  btn.textContent    = showing ? 'Use raw hex…' : 'Hide raw hex';
+  if (showing) document.getElementById('vendor_elements_raw').value = '';
+  updateVendorPreview();
+}
+
+// Normalise a string to lowercase hex, stripping common separators.
+function _toHex(s) {
+  return (s || '').replace(/[\s:\-_]+/g, '').toLowerCase();
+}
+
+// Convert a UTF-8 text string to a hex byte string.
+function _textToHex(s) {
+  const bytes = new TextEncoder().encode(s);
+  let out = '';
+  for (const b of bytes) out += b.toString(16).padStart(2, '0');
+  return out;
+}
+
+// Build a single IE row's hex (or null if invalid/incomplete).
+// Also stamps the row with a byte-count annotation and an err class on overflow.
+function _buildIERow(row) {
+  const oui  = _toHex(row.querySelector('.ie-oui').value);
+  const type = _toHex((row.querySelector('.ie-type').value || '').replace(/^0x/i,''));
+  const fmt  = row.querySelector('.ie-fmt').value;
+  const data = row.querySelector('.ie-data').value || '';
+  const counter = row.querySelector('.ie-byte-count');
+
+  // Both empty → silently skip (incomplete row, not an error)
+  if (!oui && !type && !data) {
+    counter.textContent = '— bytes';
+    counter.classList.remove('err');
+    return null;
+  }
+
+  if (oui.length !== 6 || !/^[0-9a-f]+$/.test(oui)) {
+    counter.textContent = 'invalid OUI';
+    counter.classList.add('err');
+    return null;
+  }
+  if (type.length !== 2 || !/^[0-9a-f]+$/.test(type)) {
+    counter.textContent = 'invalid type';
+    counter.classList.add('err');
+    return null;
+  }
+
+  let dataHex = '';
+  if (fmt === 'hex') {
+    dataHex = _toHex(data);
+    if (!/^[0-9a-f]*$/.test(dataHex) || dataHex.length % 2 !== 0) {
+      counter.textContent = 'invalid hex data';
+      counter.classList.add('err');
+      return null;
+    }
+  } else {
+    dataHex = _textToHex(data);
+  }
+
+  const payload = oui + type + dataHex;          // bytes after the length field
+  const byteLen = payload.length / 2;
+  if (byteLen > 255) {
+    counter.textContent = `${byteLen} bytes — exceeds 255 limit`;
+    counter.classList.add('err');
+    return null;
+  }
+  counter.textContent = `${byteLen} bytes`;
+  counter.classList.remove('err');
+  const lenHex = byteLen.toString(16).padStart(2, '0');
+  return 'dd' + lenHex + payload;
+}
+
+// Walk the IE list (or use raw override) and return the full vendor_elements hex.
+function buildVendorElementsHex() {
+  const raw = (document.getElementById('vendor_elements_raw').value || '').trim();
+  if (raw) return _toHex(raw);
+  const rows = document.querySelectorAll('#vendor-ie-list .ie-row');
+  const parts = [];
+  for (const r of rows) {
+    const h = _buildIERow(r);
+    if (h) parts.push(h);
+  }
+  return parts.join('');
+}
+
+function updateVendorPreview() {
+  const hex = buildVendorElementsHex();
+  const wrap = document.getElementById('vendor-ie-preview-wrap');
+  const pre  = document.getElementById('vendor-ie-preview');
+  if (hex) {
+    wrap.style.display = '';
+    pre.textContent = hex;
+    pre.classList.remove('empty');
+  } else {
+    wrap.style.display = 'none';
+    pre.textContent = '';
+  }
+}
+
 function collectParams() {
   const ifaceName = (document.getElementById('iface_name').value || '').trim() || 'wlan0';
   return {
@@ -1482,7 +1713,7 @@ function collectParams() {
     bss_transition:       document.getElementById('bss_transition').checked,
     time_advertisement:   document.getElementById('time_advertisement').checked,
     time_zone:            document.getElementById('time_zone').value,
-    vendor_elements:      document.getElementById('vendor_elements').value,
+    vendor_elements:      buildVendorElementsHex(),
     custom_lines:         document.getElementById('custom_lines').value,
   };
 }
@@ -1554,6 +1785,7 @@ loadInterfaces();
 loadBackends();
 loadLibrary();
 onBandChange();
+addVendorIE();  // seed one empty IE row in the structured editor
 </script>
 
 </body>
