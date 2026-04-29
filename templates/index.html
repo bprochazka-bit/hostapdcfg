@@ -362,6 +362,83 @@
   }
   .lib-search:focus { outline: none; border-color: var(--accent); }
 
+  /* ── Collapsible Additional Options panes ── */
+  details.section > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary .chev {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    transition: transform 0.18s;
+  }
+  details.section[open] > summary .chev { transform: rotate(90deg); }
+
+  details.sub-section {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  details.sub-section > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    padding: 9px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-bright);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details.sub-section > summary::-webkit-details-marker { display: none; }
+  details.sub-section > summary:hover { background: var(--surface2); }
+  details.sub-section > summary .sub-chev {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    transition: transform 0.18s;
+  }
+  details.sub-section[open] > summary .sub-chev { transform: rotate(90deg); }
+  details.sub-section[open] > summary {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .sub-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sub-tag {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    background: var(--surface3);
+    color: var(--text-dim);
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    resize: vertical;
+    min-height: 70px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
   .no-ifaces {
     padding: 24px;
     text-align: center;
@@ -692,6 +769,144 @@
         </div>
       </div>
     </div>
+
+    <!-- Additional Options (collapsible) -->
+    <details class="section" id="addl-section">
+      <summary class="section-header">
+        <div class="dot" style="background:#ffaa00"></div>
+        Additional Options
+        <span class="sub-tag">advanced</span>
+        <span class="chev">▶</span>
+      </summary>
+      <div class="section-body">
+
+        <details class="sub-section">
+          <summary>EAP / RADIUS (WPA Enterprise)<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Enable EAP / 802.1X</div>
+                <div class="toggle-desc">Replace PSK with WPA-EAP and add ieee8021x=1</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="eap_enabled"><span class="slider"></span></label>
+            </div>
+            <label><span>NAS identifier</span>
+              <input type="text" id="nas_identifier" placeholder="ap1.example.com">
+            </label>
+            <label><span>Auth server address</span>
+              <input type="text" id="radius_auth_addr" placeholder="10.0.0.1">
+            </label>
+            <div class="row2">
+              <label><span>Auth port</span><input type="number" id="radius_auth_port" value="1812" min="1" max="65535"></label>
+              <label><span>Auth shared secret</span><input type="password" id="radius_auth_secret" placeholder="changeme"></label>
+            </div>
+            <label><span>Accounting server <em style="font-weight:300;text-transform:none">(optional)</em></span>
+              <input type="text" id="radius_acct_addr" placeholder="10.0.0.1">
+            </label>
+            <div class="row2">
+              <label><span>Acct port</span><input type="number" id="radius_acct_port" value="1813" min="1" max="65535"></label>
+              <label><span>Acct shared secret</span><input type="password" id="radius_acct_secret"></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Inactivity & client maintenance<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <label><span>ap_max_inactivity <em style="font-weight:300;text-transform:none">(seconds, blank = hostapd default 300)</em></span>
+              <input type="number" id="ap_max_inactivity" placeholder="300" min="1" max="86400">
+            </label>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">disassoc_low_ack</div>
+                <div class="toggle-desc">Drop clients that fail many consecutive ACKs</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="disassoc_low_ack"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">skip_inactivity_poll</div>
+                <div class="toggle-desc">Don't probe idle clients with null-data frames</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="skip_inactivity_poll"><span class="slider"></span></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Client isolation & multicast<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">ap_isolate</div>
+                <div class="toggle-desc">Block client-to-client traffic at the AP (guest networks)</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="ap_isolate"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">multicast_to_unicast</div>
+                <div class="toggle-desc">Convert multicast frames to per-client unicast</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="multicast_to_unicast"><span class="slider"></span></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Roaming assistance (802.11k / 802.11v)<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">rrm_neighbor_report</div>
+                <div class="toggle-desc">802.11k: advertise neighbor APs to clients</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="rrm_neighbor_report"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">bss_transition</div>
+                <div class="toggle-desc">802.11v: BSS transition management for roaming</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="bss_transition"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">time_advertisement</div>
+                <div class="toggle-desc">Advertise UTC time in beacons (802.11v)</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="time_advertisement"><span class="slider"></span></label>
+            </div>
+            <label><span>time_zone <em style="font-weight:300;text-transform:none">(POSIX TZ string)</em></span>
+              <input type="text" id="time_zone" placeholder="UTC0 or EST5EDT,M3.2.0,M11.1.0">
+            </label>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Vendor-specific information elements<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <label><span>vendor_elements <em style="font-weight:300;text-transform:none">(hex string)</em></span>
+              <input type="text" id="vendor_elements" placeholder="dd05112233445566">
+              <span class="hint">Custom IEs appended to beacons / probe responses. Format: type+length+OUI+data, hex.</span>
+            </label>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Custom hostapd lines<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <label><span>Free-form configuration</span>
+              <textarea id="custom_lines" rows="5" placeholder="# Lines added verbatim to the end of hostapd.conf
+# e.g. wmm_ac_be_aifs=3
+#      uapsd_advertisement_enabled=1"></textarea>
+              <span class="hint">No validation — use for parameters not exposed by the UI.</span>
+            </label>
+          </div>
+        </details>
+
+      </div>
+    </details>
 
     <button class="btn-generate" onclick="generate()">⚡ Generate hostapd.conf</button>
   </div>
@@ -1248,6 +1463,27 @@ function collectParams() {
     dtim_period:   document.getElementById('dtim_period').value,
     enable_dfs:    document.getElementById('enable_dfs').checked,
     backend:       document.getElementById('backend').value,
+
+    // Additional Options (advanced / uncommon)
+    eap_enabled:          document.getElementById('eap_enabled').checked,
+    nas_identifier:       document.getElementById('nas_identifier').value,
+    radius_auth_addr:     document.getElementById('radius_auth_addr').value,
+    radius_auth_port:     document.getElementById('radius_auth_port').value,
+    radius_auth_secret:   document.getElementById('radius_auth_secret').value,
+    radius_acct_addr:     document.getElementById('radius_acct_addr').value,
+    radius_acct_port:     document.getElementById('radius_acct_port').value,
+    radius_acct_secret:   document.getElementById('radius_acct_secret').value,
+    ap_max_inactivity:    document.getElementById('ap_max_inactivity').value,
+    disassoc_low_ack:     document.getElementById('disassoc_low_ack').checked,
+    skip_inactivity_poll: document.getElementById('skip_inactivity_poll').checked,
+    ap_isolate:           document.getElementById('ap_isolate').checked,
+    multicast_to_unicast: document.getElementById('multicast_to_unicast').checked,
+    rrm_neighbor_report:  document.getElementById('rrm_neighbor_report').checked,
+    bss_transition:       document.getElementById('bss_transition').checked,
+    time_advertisement:   document.getElementById('time_advertisement').checked,
+    time_zone:            document.getElementById('time_zone').value,
+    vendor_elements:      document.getElementById('vendor_elements').value,
+    custom_lines:         document.getElementById('custom_lines').value,
   };
 }
 

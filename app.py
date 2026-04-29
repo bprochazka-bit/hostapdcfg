@@ -898,6 +898,25 @@ PARAM_LABELS = {
     "beacon_int":    "Beacon Interval",
     "dtim_period":   "DTIM Period",
     "enable_dfs":    "Enable DFS",
+    "eap_enabled":         "EAP / RADIUS Enabled",
+    "radius_auth_addr":    "RADIUS Auth Server",
+    "radius_auth_port":    "RADIUS Auth Port",
+    "radius_auth_secret":  "RADIUS Auth Secret",
+    "radius_acct_addr":    "RADIUS Acct Server",
+    "radius_acct_port":    "RADIUS Acct Port",
+    "radius_acct_secret":  "RADIUS Acct Secret",
+    "nas_identifier":      "NAS Identifier",
+    "ap_max_inactivity":   "AP Max Inactivity",
+    "disassoc_low_ack":    "Disassoc on Low ACK",
+    "skip_inactivity_poll":"Skip Inactivity Poll",
+    "ap_isolate":          "AP Client Isolation",
+    "multicast_to_unicast":"Multicast to Unicast",
+    "rrm_neighbor_report": "RRM Neighbor Report (802.11k)",
+    "bss_transition":      "BSS Transition (802.11v)",
+    "time_advertisement":  "Time Advertisement",
+    "time_zone":           "Time Zone",
+    "vendor_elements":     "Vendor Elements",
+    "custom_lines":        "Custom Lines",
 }
 
 
@@ -952,6 +971,31 @@ def generate_hostapd_conf(params: dict, orig_params: dict = None) -> str:
     enable_dfs   = p.get("enable_dfs", False)
     beacon_int   = int(p.get("beacon_int", 100))
     dtim_period  = int(p.get("dtim_period", 2))
+
+    # ── Additional Options (advanced / uncommon) ─────────────────────────────
+    eap_enabled        = bool(p.get("eap_enabled", False))
+    radius_auth_addr   = (p.get("radius_auth_addr") or "").strip()
+    radius_auth_port   = str(p.get("radius_auth_port") or "1812").strip() or "1812"
+    radius_auth_secret = p.get("radius_auth_secret") or ""
+    radius_acct_addr   = (p.get("radius_acct_addr") or "").strip()
+    radius_acct_port   = str(p.get("radius_acct_port") or "1813").strip() or "1813"
+    radius_acct_secret = p.get("radius_acct_secret") or ""
+    nas_identifier     = (p.get("nas_identifier") or "").strip()
+
+    ap_max_inactivity     = str(p.get("ap_max_inactivity") or "").strip()
+    disassoc_low_ack      = bool(p.get("disassoc_low_ack", False))
+    skip_inactivity_poll  = bool(p.get("skip_inactivity_poll", False))
+
+    ap_isolate           = bool(p.get("ap_isolate", False))
+    multicast_to_unicast = bool(p.get("multicast_to_unicast", False))
+
+    rrm_neighbor_report = bool(p.get("rrm_neighbor_report", False))
+    bss_transition      = bool(p.get("bss_transition", False))
+    time_advertisement  = bool(p.get("time_advertisement", False))
+    time_zone           = (p.get("time_zone") or "").strip()
+
+    vendor_elements = (p.get("vendor_elements") or "").strip()
+    custom_lines    = p.get("custom_lines") or ""
 
     is_5g   = band == "5GHz"
     is_6g   = band == "6GHz"
@@ -1049,25 +1093,35 @@ def generate_hostapd_conf(params: dict, orig_params: dict = None) -> str:
         c("wpa=2" + derived("WPA2/WPA3 (RSN); wpa=1 is WPA1/TKIP, never use it"))
         c("rsn_pairwise=CCMP"
           + derived("AES-CCMP is the only secure cipher for WPA2/WPA3; TKIP is broken"))
-        c(f"wpa_passphrase={passphrase}{ann('passphrase')}")
+        if not eap_enabled:
+            c(f"wpa_passphrase={passphrase}{ann('passphrase')}")
         if security == "wpa3":
-            c(f"wpa_key_mgmt=SAE{ann('security')}")
+            kmgmt = "WPA-EAP-SHA256" if eap_enabled else "SAE"
+            c(f"wpa_key_mgmt={kmgmt}{ann('security')}")
             c("ieee80211w=2"
               + derived("PMF required (mandatory) for WPA3-SAE per 802.11ax §12.4"))
-            c("sae_require_mfp=1"
-              + derived("require Management Frame Protection for all SAE associations"))
+            if not eap_enabled:
+                c("sae_require_mfp=1"
+                  + derived("require Management Frame Protection for all SAE associations"))
         elif security == "wpa3-transition":
-            c(f"wpa_key_mgmt=SAE WPA-PSK{ann('security')}")
+            kmgmt = "WPA-EAP-SHA256 WPA-EAP" if eap_enabled else "SAE WPA-PSK"
+            c(f"wpa_key_mgmt={kmgmt}{ann('security')}")
             c("ieee80211w=1"
               + derived("PMF capable (optional) for WPA3-SAE Transition mode"))
-            c("sae_require_mfp=1"
-              + derived("require MFP for SAE clients; WPA2-PSK clients may connect without it"))
+            if not eap_enabled:
+                c("sae_require_mfp=1"
+                  + derived("require MFP for SAE clients; WPA2-PSK clients may connect without it"))
         else:
-            c(f"wpa_key_mgmt=WPA-PSK{ann('security')}")
-        c("#sae_groups=19 20 21 25 26"
-          + derived("SAE ECC groups; 19=P-256 is default and universally supported"))
-        c("#sae_anti_clogging_threshold=10"
-          + derived("commit frames before requiring anti-clogging token; default 5"))
+            kmgmt = "WPA-EAP" if eap_enabled else "WPA-PSK"
+            c(f"wpa_key_mgmt={kmgmt}{ann('security')}")
+        if eap_enabled:
+            c("ieee8021x=1"
+              + derived("802.1X authenticator required for EAP/RADIUS authentication"))
+        if not eap_enabled:
+            c("#sae_groups=19 20 21 25 26"
+              + derived("SAE ECC groups; 19=P-256 is default and universally supported"))
+            c("#sae_anti_clogging_threshold=10"
+              + derived("commit frames before requiring anti-clogging token; default 5"))
     c()
 
     # ── 802.11n ──
@@ -1127,6 +1181,75 @@ def generate_hostapd_conf(params: dict, orig_params: dict = None) -> str:
         c("##### IEEE 802.11be (WiFi 7 / EHT) ################################")
         c("# Requires hostapd 2.11+ (upstream git — NOT in Debian 13)")
         c(f"ieee80211be=1{ann('wifi_gen')}")
+        c()
+
+    # ── EAP / RADIUS (optional, advanced) ──
+    if eap_enabled:
+        c("##### EAP / RADIUS (802.1X) #######################################")
+        if nas_identifier:
+            c(f"nas_identifier={nas_identifier}{ann('nas_identifier')}")
+        if radius_auth_addr:
+            c(f"auth_server_addr={radius_auth_addr}{ann('radius_auth_addr')}")
+            c(f"auth_server_port={radius_auth_port}{ann('radius_auth_port')}")
+            if radius_auth_secret:
+                c(f"auth_server_shared_secret={radius_auth_secret}{ann('radius_auth_secret')}")
+        else:
+            c("# auth_server_addr=10.0.0.1     # ⚠ no RADIUS auth server set; hostapd will fail to start")
+            c("# auth_server_port=1812")
+            c("# auth_server_shared_secret=changeme")
+        if radius_acct_addr:
+            c(f"acct_server_addr={radius_acct_addr}{ann('radius_acct_addr')}")
+            c(f"acct_server_port={radius_acct_port}{ann('radius_acct_port')}")
+            if radius_acct_secret:
+                c(f"acct_server_shared_secret={radius_acct_secret}{ann('radius_acct_secret')}")
+        c()
+
+    # ── Inactivity & client maintenance (optional, advanced) ──
+    if ap_max_inactivity or disassoc_low_ack or skip_inactivity_poll:
+        c("##### Inactivity & client maintenance #############################")
+        if ap_max_inactivity:
+            c(f"ap_max_inactivity={ap_max_inactivity}{ann('ap_max_inactivity')}")
+        if disassoc_low_ack:
+            c(f"disassoc_low_ack=1{ann('disassoc_low_ack')}")
+        if skip_inactivity_poll:
+            c(f"skip_inactivity_poll=1{ann('skip_inactivity_poll')}")
+        c()
+
+    # ── Client isolation / multicast (optional, advanced) ──
+    if ap_isolate or multicast_to_unicast:
+        c("##### Client isolation / multicast handling #######################")
+        if ap_isolate:
+            c(f"ap_isolate=1{ann('ap_isolate')}")
+        if multicast_to_unicast:
+            c(f"multicast_to_unicast=1{ann('multicast_to_unicast')}")
+        c()
+
+    # ── Roaming assistance 802.11k / 802.11v (optional, advanced) ──
+    if rrm_neighbor_report or bss_transition or time_advertisement or time_zone:
+        c("##### Roaming assistance (802.11k / 802.11v) ######################")
+        if rrm_neighbor_report:
+            c(f"rrm_neighbor_report=1{ann('rrm_neighbor_report')}")
+        if bss_transition:
+            c(f"bss_transition=1{ann('bss_transition')}")
+        if time_advertisement:
+            c(f"time_advertisement=2{ann('time_advertisement')}")
+        if time_zone:
+            c(f"time_zone={time_zone}{ann('time_zone')}")
+        c()
+
+    # ── Vendor-specific information elements (optional, advanced) ──
+    if vendor_elements:
+        c("##### Vendor-specific information elements ########################")
+        c(f"vendor_elements={vendor_elements}{ann('vendor_elements')}")
+        c()
+
+    # ── User-supplied custom lines (optional, advanced) ──
+    if custom_lines.strip():
+        c("##### Custom configuration (user-supplied) ########################")
+        for raw in custom_lines.splitlines():
+            ln = raw.rstrip()
+            if ln:
+                c(ln)
         c()
 
     # ── Module params ──
