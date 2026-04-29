@@ -973,6 +973,9 @@ def generate_hostapd_conf(params: dict, orig_params: dict = None) -> str:
     c(f"# Bus type  : {db.get('bus_types', ['unknown'])[0].upper()}")
     c(f"# WiFi gen  : WiFi {wifi_gen}  |  Band : {band}  |  Width : {channel_width} MHz")
     c(f"# Backend   : {backend['label']}")
+    if p.get("from_library"):
+        c("# Source    : Driver Library (no live interface) — verify the")
+        c(f"#             interface name '{iface}' matches your hardware before use.")
     c("# Reference : https://w1.fi/cgit/hostap/plain/hostapd/hostapd.conf")
     c("# Reference : https://github.com/morrownr/USB-WiFi")
     c()
@@ -1204,6 +1207,57 @@ def api_backends():
 @app.route("/api/capabilities/<driver>")
 def api_capabilities(driver):
     return jsonify(DRIVER_CAPABILITIES.get(driver, DRIVER_CAPABILITIES["unknown"]))
+
+
+# Vendor groupings for the picker. Drivers not listed here (e.g. "unknown")
+# are excluded from the library so the user only sees real chipset choices.
+DRIVER_LIBRARY_GROUPS = [
+    ("Mediatek (USB)",        ["mt7610u", "mt7612u", "mt7921u", "mt7925u"]),
+    ("Mediatek (PCIe)",       ["mt7921e", "mt7922", "mt7915e", "mt7916e",
+                               "mt7925e", "mt7996e"]),
+    ("Realtek USB (rtw88)",   ["rtw88_8812au", "rtw88_8821au", "rtw88_8814au",
+                               "rtw88_8812bu", "rtw88_8821cu"]),
+    ("Realtek PCIe (rtw89)",  ["rtw89_8852be", "rtw89_8852ce", "rtw89_8922ae"]),
+    ("Intel (PCIe)",          ["iwlwifi"]),
+    ("Qualcomm Atheros",      ["ath9k_htc", "ath10k_usb", "ath10k_pci",
+                               "ath11k_pci"]),
+    ("Ralink / rt2x00",       ["rt2800usb"]),
+]
+
+
+@app.route("/api/driver_library")
+def api_driver_library():
+    """
+    Return the catalog of known drivers/chipsets, grouped by vendor.
+    Used by the frontend on machines that have no wireless interface
+    (or when the user wants to generate a config for hardware they
+    don't yet have installed).
+    """
+    groups = []
+    for vendor, keys in DRIVER_LIBRARY_GROUPS:
+        entries = []
+        for k in keys:
+            db = DRIVER_CAPABILITIES.get(k)
+            if not db:
+                continue
+            entries.append({
+                "driver":              k,
+                "label":               db["label"],
+                "wifi_gen":            db.get("wifi_gen", 4),
+                "bus_types":           db.get("bus_types", []),
+                "bands":               db.get("bands", []),
+                "max_channel_width":   db.get("max_channel_width", 20),
+                "recommended_backend": db.get("recommended_backend", "debian"),
+                "iwlwifi_lar":         db.get("iwlwifi_lar", False),
+                "ap_mode":             db.get("ap_mode", False),
+                "he_capab":            bool(db.get("he_capab")),
+                "vht_capab":           bool(db.get("vht_capab")),
+                "eht_capab":           bool(db.get("eht_capab")),
+                "dfs":                 bool(db.get("dfs")),
+                "note":                db.get("note"),
+            })
+        groups.append({"vendor": vendor, "entries": entries})
+    return jsonify(groups)
 
 
 @app.route("/api/channels")

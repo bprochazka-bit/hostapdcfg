@@ -289,6 +289,78 @@
   .badge-wifi { background: rgba(0,212,255,0.15); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
   .badge-band { background: rgba(0,255,136,0.12); color: var(--accent2); border: 1px solid rgba(0,255,136,0.25); }
   .badge-noap { background: rgba(255,107,53,0.15); color: var(--accent3); border: 1px solid rgba(255,107,53,0.3); }
+  .badge-virt { background: rgba(204,68,255,0.12); color: #cc88ff; border: 1px solid rgba(204,68,255,0.3); }
+
+  /* ── Source tabs (Detected / Library) ── */
+  .src-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+    background: var(--bg);
+    margin-bottom: 12px;
+  }
+  .src-tab {
+    flex: 1;
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .src-tab.active {
+    background: var(--surface3);
+    color: var(--text-bright);
+  }
+  .src-tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Library vendor groups ── */
+  .lib-vendor {
+    margin-bottom: 10px;
+  }
+  .lib-vendor-title {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+    padding: 0 2px;
+  }
+  .lib-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lib-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .lib-card:hover { border-color: var(--accent); }
+  .lib-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .lib-card-label { font-size: 0.78rem; color: var(--text-bright); font-weight: 500; }
+  .lib-card-meta { font-size: 0.66rem; color: var(--text-dim); font-family: var(--mono); margin-top: 2px; }
+  .lib-search {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+  }
+  .lib-search:focus { outline: none; border-color: var(--accent); }
 
   .no-ifaces {
     padding: 24px;
@@ -481,15 +553,25 @@
   <!-- ── LEFT PANEL ── -->
   <div class="panel-left">
 
-    <!-- Interfaces -->
+    <!-- Interfaces / Library -->
     <div class="section">
       <div class="section-header">
         <div class="dot"></div>
-        Wireless Interfaces
-        <button class="btn-refresh" onclick="loadInterfaces()" style="margin-left:auto">↺ Refresh</button>
+        <span id="src-section-title">Wireless Interfaces</span>
+        <button class="btn-refresh" onclick="loadInterfaces()" style="margin-left:auto" id="btn-refresh-ifaces">↺ Refresh</button>
       </div>
-      <div class="section-body" id="iface-list">
-        <div class="no-ifaces">Scanning for interfaces…</div>
+      <div class="section-body">
+        <div class="src-tabs">
+          <button class="src-tab active" id="tab-detected" onclick="setSourceTab('detected')">Detected</button>
+          <button class="src-tab" id="tab-library" onclick="setSourceTab('library')">Driver Library</button>
+        </div>
+        <div id="iface-list">
+          <div class="no-ifaces">Scanning for interfaces…</div>
+        </div>
+        <div id="lib-list" style="display:none">
+          <input type="text" class="lib-search" id="lib-search" placeholder="Filter by chipset, vendor, driver…" oninput="renderLibrary()">
+          <div id="lib-groups"></div>
+        </div>
       </div>
     </div>
 
@@ -505,6 +587,9 @@
     <div class="section">
       <div class="section-header"><div class="dot" style="background:var(--accent3)"></div>Network Settings</div>
       <div class="section-body">
+        <label><span>Interface name <em style="font-weight:300;text-transform:none">(used as <code>interface=</code> in hostapd.conf)</em></span>
+          <input type="text" id="iface_name" value="wlan0" maxlength="15" placeholder="wlan0">
+        </label>
         <label><span>SSID</span><input type="text" id="ssid" value="MyAccessPoint" maxlength="32"></label>
         <div class="row2">
           <label><span>Band</span>
@@ -632,6 +717,123 @@ let interfaces = [];
 let selectedIface = null;
 let currentConfig = '';
 let backends = {};
+let library = [];           // [{vendor, entries: [...]}]
+let sourceMode = 'detected'; // 'detected' | 'library'
+let selectedLibDriver = null;
+
+// Switch between "Detected" and "Driver Library" pickers
+function setSourceTab(mode) {
+  sourceMode = mode;
+  document.getElementById('tab-detected').classList.toggle('active', mode === 'detected');
+  document.getElementById('tab-library').classList.toggle('active', mode === 'library');
+  document.getElementById('iface-list').style.display = mode === 'detected' ? '' : 'none';
+  document.getElementById('lib-list').style.display   = mode === 'library'  ? '' : 'none';
+  document.getElementById('btn-refresh-ifaces').style.display = mode === 'detected' ? '' : 'none';
+  document.getElementById('src-section-title').textContent =
+    mode === 'detected' ? 'Wireless Interfaces' : 'Driver Library';
+
+  if (mode === 'detected' && interfaces.length) {
+    selectIface(interfaces[0]);
+  } else if (mode === 'library') {
+    if (selectedLibDriver) selectLibraryEntry(selectedLibDriver);
+    else if (library[0] && library[0].entries[0]) selectLibraryEntry(library[0].entries[0]);
+  }
+}
+
+async function loadLibrary() {
+  try {
+    const res = await fetch('/api/driver_library');
+    library = await res.json();
+    renderLibrary();
+  } catch (e) {
+    document.getElementById('lib-groups').innerHTML =
+      '<div class="no-ifaces">⚠ Could not load driver library.</div>';
+  }
+}
+
+function renderLibrary() {
+  const root = document.getElementById('lib-groups');
+  const q = (document.getElementById('lib-search').value || '').trim().toLowerCase();
+  root.innerHTML = '';
+  let any = false;
+  for (const grp of library) {
+    const matched = grp.entries.filter(e =>
+      !q ||
+      e.label.toLowerCase().includes(q) ||
+      e.driver.toLowerCase().includes(q) ||
+      grp.vendor.toLowerCase().includes(q)
+    );
+    if (!matched.length) continue;
+    any = true;
+    const wrap = document.createElement('div');
+    wrap.className = 'lib-vendor';
+    wrap.innerHTML = `<div class="lib-vendor-title">${esc(grp.vendor)}</div>`;
+    const list = document.createElement('div');
+    list.className = 'lib-list';
+    for (const e of matched) {
+      const card = document.createElement('div');
+      card.className = 'lib-card';
+      card.dataset.driver = e.driver;
+      const bus = (e.bus_types || []).join('/').toUpperCase() || '—';
+      const bands = (e.bands || []).join(', ');
+      const lar = e.iwlwifi_lar ? ' · LAR ⚠' : '';
+      card.innerHTML = `
+        <div class="lib-card-label">${esc(e.label)}</div>
+        <div class="lib-card-meta">${esc(e.driver)} · ${bus} · WiFi ${e.wifi_gen} · ${esc(bands)} · ≤${e.max_channel_width} MHz${lar}</div>
+      `;
+      card.onclick = () => selectLibraryEntry(e);
+      if (selectedLibDriver && selectedLibDriver.driver === e.driver) {
+        card.classList.add('selected');
+      }
+      list.appendChild(card);
+    }
+    wrap.appendChild(list);
+    root.appendChild(wrap);
+  }
+  if (!any) {
+    root.innerHTML = '<div class="no-ifaces">No chipsets match your filter.</div>';
+  }
+}
+
+// Build a synthetic iface object (matching the shape of /api/interfaces entries)
+// from a library entry, so the rest of the UI can treat it identically.
+function selectLibraryEntry(entry) {
+  selectedLibDriver = entry;
+  document.querySelectorAll('.lib-card').forEach(c =>
+    c.classList.toggle('selected', c.dataset.driver === entry.driver));
+
+  // Find the full capability record by faking the API shape a detected
+  // interface would expose. We only need the fields selectIface() reads.
+  const fakeCap = {
+    label:               entry.label,
+    wifi_gen:            entry.wifi_gen,
+    bus_types:           entry.bus_types,
+    bands:               entry.bands,
+    max_channel_width:   entry.max_channel_width,
+    he_capab:            entry.he_capab,
+    vht_capab:           entry.vht_capab,
+    eht_capab:           entry.eht_capab,
+    dfs:                 entry.dfs,
+    iwlwifi_lar:         entry.iwlwifi_lar,
+    recommended_backend: entry.recommended_backend,
+    ap_mode:             entry.ap_mode,
+    note:                entry.note,
+  };
+  const synthetic = {
+    interface:           document.getElementById('iface_name').value || 'wlan0',
+    driver:              entry.driver,
+    driver_label:        entry.label,
+    bus_type:            (entry.bus_types && entry.bus_types[0]) || 'unknown',
+    mac:                 '',
+    bands:               entry.bands || [],
+    ap_support:          entry.ap_mode !== false,
+    iwlwifi_lar:         !!entry.iwlwifi_lar,
+    recommended_backend: entry.recommended_backend || 'debian',
+    capabilities:        fakeCap,
+    from_library:        true,
+  };
+  selectIface(synthetic);
+}
 
 // ── Undo / warning state ─────────────────────────────────────────────────────
 // undoStack: array of { change, prevFormState }
@@ -809,7 +1011,11 @@ async function loadInterfaces() {
 function renderInterfaces() {
   const list = document.getElementById('iface-list');
   if (!interfaces.length) {
-    list.innerHTML = '<div class="no-ifaces">No wireless interfaces found.</div>';
+    list.innerHTML = '<div class="no-ifaces">No wireless interfaces detected on this system.<br>'
+                   + 'Switch to <strong>Driver Library</strong> above to pick a chipset by name '
+                   + 'and generate a config for hardware you intend to use.</div>';
+    // Auto-switch to library mode so the user has something to do.
+    if (sourceMode === 'detected') setSourceTab('library');
     return;
   }
   list.innerHTML = '';
@@ -845,6 +1051,18 @@ function selectIface(iface) {
   document.querySelectorAll('.iface-card').forEach(c => c.classList.remove('selected'));
   const card = document.querySelector(`.iface-card[data-iface="${iface.interface}"]`);
   if (card) card.classList.add('selected');
+
+  // Sync the editable interface-name input. For detected interfaces we
+  // overwrite with the real kernel name; for library entries we leave any
+  // user-edited value intact and only seed the default 'wlan0' if empty.
+  const nameInput = document.getElementById('iface_name');
+  if (nameInput) {
+    if (iface.from_library) {
+      if (!nameInput.value) nameInput.value = 'wlan0';
+    } else {
+      nameInput.value = iface.interface;
+    }
+  }
 
   const recBackend = iface.recommended_backend || 'debian';
   const backendSel = document.getElementById('backend');
@@ -1009,9 +1227,11 @@ async function generate() {
 }
 
 function collectParams() {
+  const ifaceName = (document.getElementById('iface_name').value || '').trim() || 'wlan0';
   return {
-    interface:     selectedIface.interface,
+    interface:     ifaceName,
     driver:        selectedIface.driver,
+    from_library:  !!selectedIface.from_library,
     ssid:          document.getElementById('ssid').value,
     passphrase:    document.getElementById('passphrase').value,
     band:          document.getElementById('band').value,
@@ -1096,6 +1316,7 @@ function notify(msg) {
 // Init
 loadInterfaces();
 loadBackends();
+loadLibrary();
 onBandChange();
 </script>
 
