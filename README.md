@@ -1,6 +1,10 @@
-# hostapd Configurator
+# ~/$ hostapdcfg
 
 A Python/Flask web application for Debian 13 that generates correct, driver-aware `hostapd.conf` files for Linux wireless access points. Rather than requiring you to know which parameters are valid for your specific chipset, WiFi generation, and band combination, the app detects your hardware, enforces all inter-parameter dependencies automatically, and annotates the generated config with plain-English explanations for every setting.
+
+![hostapdcfg interface](screenshot.png)
+
+The UI is a single-page terminal-styled console: hardware picker and form controls on the left, the live-generated, color-annotated `hostapd.conf` on the right. No external CSS or JS is fetched at runtime — the entire frontend is embedded in `hostapdcfg.py`.
 
 ---
 
@@ -10,7 +14,9 @@ A Python/Flask web application for Debian 13 that generates correct, driver-awar
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Running the App](#running-the-app)
+- [User Interface](#user-interface)
 - [Interface Detection](#interface-detection)
+- [Driver Library Mode](#driver-library-mode)
 - [Driver & Chipset Database](#driver--chipset-database)
 - [Bus Type Detection](#bus-type-detection)
 - [Dependency Resolution](#dependency-resolution)
@@ -20,6 +26,7 @@ A Python/Flask web application for Debian 13 that generates correct, driver-awar
 - [Intel iwlwifi & LAR Restrictions](#intel-iwlwifi--lar-restrictions)
 - [WiFi Generation Parameter Reference](#wifi-generation-parameter-reference)
 - [Security Modes](#security-modes)
+- [Additional Options](#additional-options)
 - [API Reference](#api-reference)
 - [Deploying as a systemd Service](#deploying-as-a-systemd-service)
 - [References](#references)
@@ -93,6 +100,27 @@ app.run(host="0.0.0.0", port=5000, debug=False)
 
 ---
 
+## User Interface
+
+The page is split into two panels:
+
+**Left panel — input**
+
+- **Driver Library / Detected tabs** at the top of the first section let you switch between auto-detected wireless interfaces and the full chipset database (see [Driver Library Mode](#driver-library-mode)).
+- **Detected Capabilities** card grid summarizes the chosen radio at a glance: WiFi generation, bus type, max channel width, 802.11ax/ac/DFS support, Intel LAR status, and the supported bands.
+- **Network Settings** — interface name, SSID, band, channel, channel width, WiFi gen, country code, optional bridge interface.
+- **Security** — security mode dropdown (Open / WPA2-PSK / WPA3-SAE Transition / WPA3-SAE) and passphrase.
+- **hostapd Backend** — picker for `debian` / `lar_patched` / `git_head` with availability status and inline build instructions for any binary not present on the system.
+- **Advanced** — beacon interval, DTIM period, max stations, HE BSS color, hidden SSID toggle, DFS toggle.
+- **Additional Options** — collapsible advanced sub-panels (see [Additional Options](#additional-options)).
+- **`> generate hostapd.conf`** button at the bottom builds the config.
+
+**Right panel — output**
+
+The generated `hostapd.conf` is rendered in a terminal-style block with syntax-aware color coding for the three annotation tiers (see [Inline Config Annotations](#inline-config-annotations)). The header strip carries **Copy** and **Download** buttons that copy the raw text to the clipboard or save it as `hostapd.conf`.
+
+---
+
 ## Interface Detection
 
 On startup (and when you click **↺ Refresh**), the app scans `/sys/class/net` for any interface that has a `wireless/` or `phy80211/` subdirectory — the standard kernel markers for wireless interfaces regardless of bus type.
@@ -106,6 +134,14 @@ For each wireless interface found, it collects:
 - **Actual HT/VHT/HE capabilities** — parsed from the Band sections of `iw phy phyX info`
 - **LAR status** — for `iwlwifi`, whether all 5 GHz channels are marked `NO_IR` (indicating LAR has set the world regdomain)
 - **MAC address** — from `/sys/class/net/<iface>/address`
+
+---
+
+## Driver Library Mode
+
+The **Driver Library** tab in the picker lets you build a config for a chipset that is not currently present on the running system — useful when preparing a config ahead of installing the hardware, or when working on a different machine than the target.
+
+The library exposes every entry in `DRIVER_CAPABILITIES`, grouped by vendor and bus, with a fuzzy filter input that matches against chipset name, driver key, and vendor (e.g. `7925`, `mt76`, `realtek`). Selecting a chipset populates the form with the driver's capability defaults exactly as if the hardware had been auto-detected — the only difference is that the generated config header records `Source: Driver Library (no live interface)` so you remember to verify the interface name on the target machine before deploying.
 
 ---
 
@@ -412,6 +448,23 @@ The full lookup table is encoded in `_center_channel()` in `hostapdcfg.py`.
 `rsn_pairwise=CCMP` is set for all authenticated modes. TKIP is not generated — it is a broken cipher and has been deprecated from the 802.11 standard.
 
 `sae_require_mfp=1` is added for all WPA3 modes. SAE group 19 (P-256) is the default and is universally supported; groups 20 and 21 are commented for reference.
+
+---
+
+## Additional Options
+
+The **Additional Options** panel groups uncommon `hostapd` features behind collapsible sub-sections. Each one stays closed by default and only emits config lines when fields inside it are populated, so simple WPA2/WPA3-PSK configs stay clean.
+
+| Sub-section | Generates |
+|---|---|
+| **EAP / RADIUS (WPA Enterprise)** | `ieee8021x=1`, `auth_server_addr/port/secret`, `acct_server_*`, and switches `wpa_key_mgmt` to `WPA-EAP` / `WPA-EAP-SHA256` (or mixed with SAE for transition mode). |
+| **Inactivity & client maintenance** | `ap_max_inactivity`, `disassoc_low_ack`, `skip_inactivity_poll`. |
+| **Client isolation & multicast** | `ap_isolate`, `multicast_to_unicast`, plus per-bridge isolation hooks. |
+| **Roaming assistance (802.11k / 802.11v)** | `rrm_neighbor_report`, `rrm_beacon_report`, `bss_transition`, `wnm_sleep_mode`, `time_advertisement`. |
+| **Vendor-specific information elements** | Raw `vendor_elements=` hex blobs for custom IEs. |
+| **Custom hostapd lines** | Free-form text appended verbatim to the bottom of the generated config — escape hatch for any directive not yet exposed in the UI. |
+
+Fields left blank are simply omitted from the output, and the dependency resolver is aware of the EAP toggle in particular: enabling Enterprise mode replaces the PSK key-mgmt strings without otherwise disturbing the security flow.
 
 ---
 
