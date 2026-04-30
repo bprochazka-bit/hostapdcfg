@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Style preview — hostapd Configurator</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2300d4ff' rx='2'/></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --surface2: #1a2330;
+    --surface3: #1f2d3d;
+    --border: #253245;
+    --accent: #00d4ff;
+    --accent2: #00ff88;
+    --text: #c9d8e8;
+    --text-dim: #637080;
+    --text-bright: #e8f4ff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 40px 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    color: var(--text-bright);
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .lede {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+  .lede code { font-family: var(--mono); color: var(--accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 20px;
+    max-width: 1400px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-num {
+    background: var(--surface2);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-num strong { color: var(--text-bright); font-weight: 700; }
+  .card-vibe { font-size: 0.65rem; font-style: italic; color: var(--text-dim); }
+
+  .mock-header {
+    background: var(--surface);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    min-height: 72px;
+  }
+  .mock-header .titles h2 {
+    color: var(--text-bright);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .mock-header .titles p {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 300;
+  }
+
+  .mock-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .row-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .favicons {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .fav-16 { width: 16px; height: 16px; }
+  .fav-64 { width: 64px; height: 64px; image-rendering: pixelated; }
+  .fav-meta {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+  }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 1 — Flat solid cyan
+     ───────────────────────────────────────────────────── */
+  .logo-1 {
+    width: 40px; height: 40px;
+    background: var(--accent);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-1 {
+    background: var(--accent);
+    color: #0a0e14;
+    border: none;
+    border-radius: 4px;
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+  }
+  .btn-1:hover { background: #00b8e0; }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 2 — Bracketed monospace ID
+     ───────────────────────────────────────────────────── */
+  .logo-2 {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .btn-2 {
+    background: transparent;
+    color: var(--accent);
+    border: 1.5px dashed var(--accent);
+    border-radius: 4px;
+    padding: 13px;
+    font-family: var(--mono);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    letter-spacing: 0.02em;
+    transition: background 0.15s, border-style 0.15s;
+  }
+  .btn-2:hover { background: rgba(0,212,255,0.06); border-style: solid; }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 3 — Outline ghost
+     ───────────────────────────────────────────────────── */
+  .logo-3 {
+    width: 40px; height: 40px;
+    background: transparent;
+    border: 1.5px solid var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-3 {
+    background: transparent;
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    border-radius: 8px;
+    padding: 13px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+  }
+  .btn-3:hover { background: rgba(0,212,255,0.1); }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 4 — Terminal prompt
+     ───────────────────────────────────────────────────── */
+  .logo-4 {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+  }
+  .logo-4 .prompt-sym { color: var(--accent2); margin-right: 6px; }
+  .logo-4 .cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .btn-4 {
+    background: var(--surface3);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 13px 16px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .btn-4:hover { border-color: var(--accent); background: var(--surface2); }
+  .btn-4 .prompt-sym { color: var(--accent2); margin-right: 8px; }
+  .btn-4 .cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 5 — Phosphor CRT
+     ───────────────────────────────────────────────────── */
+  .logo-5 {
+    width: 40px; height: 40px;
+    background: #050a05;
+    border: 1px solid #39ff14;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 12px rgba(57,255,20,0.35), inset 0 0 8px rgba(57,255,20,0.15);
+    position: relative;
+    overflow: hidden;
+  }
+  .logo-5::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent 0, transparent 2px,
+      rgba(0,0,0,0.3) 2px, rgba(0,0,0,0.3) 3px);
+    pointer-events: none;
+  }
+  .btn-5 {
+    background: #39ff14;
+    color: #050a05;
+    border: 1px solid #2bc20c;
+    border-radius: 4px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    text-shadow: 0 0 6px rgba(255,255,255,0.4);
+    box-shadow: 0 0 14px rgba(57,255,20,0.4);
+    position: relative;
+    overflow: hidden;
+    letter-spacing: 0.02em;
+  }
+  .btn-5::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent 0, transparent 2px,
+      rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 3px);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Style preview — options 1–5</h1>
+<p class="lede">
+  Each card shows how the option renders the <strong>header logo</strong>, the
+  <strong>Generate button</strong>, and the <strong>favicon</strong> (at 16 px and at 64 px so
+  you can see the shape). All five share the existing dark palette so you're comparing
+  the new shapes, not new colors. Refresh the page to see the blinking cursor on option 4.
+</p>
+
+<div class="grid">
+
+  <!-- ───────────── OPTION 1 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>01 · Flat solid cyan</strong>
+      <span class="card-vibe">utility / engineering, no flourish</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-1">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0e14" stroke-width="2" stroke-linecap="round">
+          <path d="M12 4v18"/>
+          <path d="M5 9c4-4 10-4 14 0"/>
+          <path d="M7.5 12c2.5-2.5 6.5-2.5 9 0"/>
+          <circle cx="12" cy="22" r="1.2" fill="#0a0e14" stroke="none"/>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-1">⚡ Generate hostapd.conf</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#00d4ff" rx="2"/>
+            <path d="M8 3v10M4 6c2-2 6-2 8 0M5.5 8c1.5-1.5 3.5-1.5 5 0" stroke="#0a0e14" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#00d4ff" rx="2"/>
+            <path d="M8 3v10M4 6c2-2 6-2 8 0M5.5 8c1.5-1.5 3.5-1.5 5 0" stroke="#0a0e14" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="fav-meta">SVG · 16 / 64 px</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 2 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>02 · Bracketed monospace ID</strong>
+      <span class="card-vibe">brutalist / developer tool</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-2">[hostapd]</div>
+      <div class="titles">
+        <h2>Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-2">[ generate hostapd.conf ]</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <text x="8" y="12" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700"
+                  fill="#00d4ff" text-anchor="middle">[h]</text>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <text x="8" y="12" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700"
+                  fill="#00d4ff" text-anchor="middle">[h]</text>
+          </svg>
+          <span class="fav-meta">SVG · text glyph</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 3 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>03 · Outline ghost</strong>
+      <span class="card-vibe">low-contrast, minimal</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-3">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round">
+          <path d="M12 4v18"/>
+          <path d="M5 9c4-4 10-4 14 0"/>
+          <path d="M7.5 12c2.5-2.5 6.5-2.5 9 0"/>
+          <circle cx="12" cy="22" r="1.4" fill="#00d4ff" stroke="none"/>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-3">⚡ Generate hostapd.conf</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0.75" y="0.75" width="14.5" height="14.5" rx="3" stroke="#00d4ff" stroke-width="1.2" fill="none"/>
+            <path d="M8 4.5v7M5 6.5c1.5-1.5 4.5-1.5 6 0" stroke="#00d4ff" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0.75" y="0.75" width="14.5" height="14.5" rx="3" stroke="#00d4ff" stroke-width="1.2" fill="none"/>
+            <path d="M8 4.5v7M5 6.5c1.5-1.5 4.5-1.5 6 0" stroke="#00d4ff" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="fav-meta">SVG · stroke-only</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 4 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>04 · Terminal prompt</strong>
+      <span class="card-vibe">CLI / terminal aesthetic</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-4">
+        <span class="prompt-sym">~/$</span>hostapdcfg<span class="cursor"></span>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-4"><span class="prompt-sym">&gt;</span>generate hostapd.conf<span class="cursor"></span></button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <text x="3" y="12" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700"
+                  fill="#00ff88">$</text>
+            <rect x="9" y="10" width="4" height="2" fill="#00d4ff"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <text x="3" y="12" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700"
+                  fill="#00ff88">$</text>
+            <rect x="9" y="10" width="4" height="2" fill="#00d4ff"/>
+          </svg>
+          <span class="fav-meta">SVG · $_ glyph</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 5 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>05 · Phosphor CRT</strong>
+      <span class="card-vibe">retro CRT terminal</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-5">
+        <svg width="22" height="14" viewBox="0 0 28 14" fill="none" stroke="#39ff14" stroke-width="1.5" stroke-linecap="round">
+          <path d="M1 7 Q5 1, 9 7 T17 7 T25 7" filter="url(#glow5)"/>
+          <defs>
+            <filter id="glow5"><feGaussianBlur stdDeviation="0.5"/></filter>
+          </defs>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-5">▶ GENERATE HOSTAPD.CONF</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#050a05"/>
+            <path d="M2 8 Q4.5 4, 7 8 T12 8 T15 8" stroke="#39ff14" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#050a05"/>
+            <path d="M2 8 Q4.5 4, 7 8 T12 8 T15 8" stroke="#39ff14" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+          </svg>
+          <span class="fav-meta">SVG · sine on black</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="margin-top:32px;color:var(--text-dim);font-size:0.8rem">
+  Once you pick one, tell me the number and I'll wire it into the live app
+  (or generate the next 5 options if none of these fit).
+</p>
+
+</body>
+</html>

@@ -1312,6 +1312,12 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/preview")
+def style_preview():
+    """Visual mockups of candidate logo / Generate-button / favicon styles."""
+    return render_template("style_preview.html")
+
+
 @app.route("/api/interfaces")
 def api_interfaces():
     return jsonify(get_wireless_interfaces())
