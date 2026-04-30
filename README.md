@@ -64,16 +64,14 @@ git clone <repo-url> hostapd-configurator
 cd hostapd-configurator
 ```
 
-Or simply copy the two files to any directory:
+Or simply copy the single file to any directory:
 
 ```
 hostapd-configurator/
-├── hostapdcfg.py
-└── templates/
-    └── index.html
+└── hostapdcfg.py
 ```
 
-No virtual environment is needed. No compiled extensions. No external CSS/JS frameworks are fetched at runtime — the UI is entirely self-contained.
+No virtual environment is needed. No compiled extensions. No external CSS/JS frameworks are fetched at runtime — the entire UI (HTML, CSS, JS, favicon) is embedded directly in `hostapdcfg.py`.
 
 ---
 

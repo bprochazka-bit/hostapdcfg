@@ -15,9 +15,1824 @@ import subprocess
 import re
 import os
 from pathlib import Path
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, jsonify, request, Response
 
 app = Flask(__name__)
+
+# ── Suppress Flask's development-server warning banner ──────────────────
+# We replace show_server_banner so the WARNING / Running-on / Press CTRL+C
+# block doesn't print. We emit our own startup line below in __main__.
+import flask.cli  # noqa: E402
+flask.cli.show_server_banner = lambda *a, **k: None
+
+INDEX_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hostapd Configurator</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0e14' rx='2'/><rect x='2' y='11' width='2' height='3' fill='%2300d4ff'/><rect x='5.5' y='8' width='2' height='6' fill='%2300d4ff'/><rect x='9' y='5' width='2' height='9' fill='%2300d4ff'/><rect x='12.5' y='2' width='2' height='12' fill='%2300d4ff'/></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --surface2: #1a2330;
+    --surface3: #1f2d3d;
+    --border: #253245;
+    --accent: #00d4ff;
+    --accent2: #00ff88;
+    --accent3: #ff6b35;
+    --warn: #ffb347;
+    --text: #c9d8e8;
+    --text-dim: #637080;
+    --text-bright: #e8f4ff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  .terminal-logo {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
+  }
+  .terminal-logo .prompt-sym {
+    color: var(--accent2);
+    margin-right: 8px;
+  }
+  .cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  header .tagline {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 300;
+  }
+  .header-badge {
+    margin-left: auto;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.3);
+    color: var(--accent);
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-family: var(--mono);
+    font-weight: 600;
+  }
+
+  /* ── Main layout ── */
+  main {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    flex: 1;
+    gap: 0;
+    height: calc(100vh - 73px);
+  }
+
+  /* ── Left panel (form) ── */
+  .panel-left {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── Right panel (output) ── */
+  .panel-right {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .output-header {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .output-header h2 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .output-actions { display: flex; gap: 8px; }
+  .btn-copy, .btn-dl {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 600;
+  }
+  .btn-copy {
+    background: rgba(0,212,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.3);
+  }
+  .btn-copy:hover { background: rgba(0,212,255,0.25); }
+  .btn-dl {
+    background: rgba(0,255,136,0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(0,255,136,0.3);
+  }
+  .btn-dl:hover { background: rgba(0,255,136,0.25); }
+
+  #config-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    white-space: pre;
+    color: #9db8cc;
+    background: var(--bg);
+  }
+  /* Syntax highlighting via spans */
+  #config-output .co { color: #3d5a75; }   /* comment */
+  #config-output .kw { color: var(--accent); font-weight: 600; }  /* key */
+  #config-output .vl { color: var(--accent2); }   /* value */
+  #config-output .hd { color: var(--accent3); font-weight: 600; }  /* section header */
+
+  /* ── Section ── */
+  .section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 12px 16px;
+    background: var(--surface3);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-header .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .section-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── Form elements ── */
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  label span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  label span.hint {
+    font-size: 0.7rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #445566;
+    font-weight: 400;
+    margin-top: 3px;
+  }
+
+  input[type=text], input[type=number], input[type=password], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-bright);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
+  }
+  select option { background: var(--surface2); }
+
+  /* Inline two-column row */
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .toggle-label { font-size: 0.8rem; color: var(--text); }
+  .toggle-desc { font-size: 0.7rem; color: var(--text-dim); }
+  .toggle {
+    position: relative;
+    width: 40px; height: 22px;
+    flex-shrink: 0;
+  }
+  .toggle input { display: none; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  .slider:before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: 0.2s;
+  }
+  input:checked + .slider { background: rgba(0,212,255,0.2); border-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(18px); background: var(--accent); }
+
+  /* ── Interface card ── */
+  .iface-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .iface-card:hover { border-color: var(--accent); }
+  .iface-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .iface-name { font-family: var(--mono); font-size: 0.9rem; color: var(--text-bright); font-weight: 600; }
+  .iface-driver { font-size: 0.72rem; color: var(--text-dim); }
+  .iface-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+  .badge {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .badge-wifi { background: rgba(0,212,255,0.15); color: var(--accent); border: 1px solid rgba(0,212,255,0.3); }
+  .badge-band { background: rgba(0,255,136,0.12); color: var(--accent2); border: 1px solid rgba(0,255,136,0.25); }
+  .badge-noap { background: rgba(255,107,53,0.15); color: var(--accent3); border: 1px solid rgba(255,107,53,0.3); }
+  .badge-virt { background: rgba(204,68,255,0.12); color: #cc88ff; border: 1px solid rgba(204,68,255,0.3); }
+
+  /* ── Source tabs (Detected / Library) ── */
+  .src-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+    background: var(--bg);
+    margin-bottom: 12px;
+  }
+  .src-tab {
+    flex: 1;
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .src-tab.active {
+    background: var(--surface3);
+    color: var(--text-bright);
+  }
+  .src-tab:hover:not(.active) { color: var(--text); }
+
+  /* ── Library vendor groups ── */
+  .lib-vendor {
+    margin-bottom: 10px;
+  }
+  .lib-vendor-title {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+    padding: 0 2px;
+  }
+  .lib-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .lib-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .lib-card:hover { border-color: var(--accent); }
+  .lib-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+  .lib-card-label { font-size: 0.78rem; color: var(--text-bright); font-weight: 500; }
+  .lib-card-meta { font-size: 0.66rem; color: var(--text-dim); font-family: var(--mono); margin-top: 2px; }
+  .lib-search {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-family: var(--sans);
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+  }
+  .lib-search:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Collapsible Additional Options panes ── */
+  details.section > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+  }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary .chev {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    transition: transform 0.18s;
+  }
+  details.section[open] > summary .chev { transform: rotate(90deg); }
+
+  details.sub-section {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  details.sub-section > summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    padding: 9px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-bright);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details.sub-section > summary::-webkit-details-marker { display: none; }
+  details.sub-section > summary:hover { background: var(--surface2); }
+  details.sub-section > summary .sub-chev {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    transition: transform 0.18s;
+  }
+  details.sub-section[open] > summary .sub-chev { transform: rotate(90deg); }
+  details.sub-section[open] > summary {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .sub-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sub-tag {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    background: var(--surface3);
+    color: var(--text-dim);
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    resize: vertical;
+    min-height: 70px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* ── Vendor IE list rows ── */
+  .row3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 8px;
+  }
+  .ie-row {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ie-row .ie-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+  }
+  .ie-row .ie-byte-count {
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    color: var(--text-dim);
+  }
+  .ie-row .ie-byte-count.err { color: var(--accent3); }
+  .btn-add {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--accent);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-add:hover { border-color: var(--accent); border-style: solid; }
+  .btn-remove {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 9px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 0.66rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-remove:hover { color: var(--accent3); border-color: var(--accent3); }
+  .ie-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent2);
+    word-break: break-all;
+    white-space: pre-wrap;
+    margin: 0;
+  }
+  .ie-preview.empty { color: var(--text-dim); }
+
+  .no-ifaces {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  /* ── Generate button ── */
+  .btn-generate {
+    width: 100%;
+    padding: 14px 18px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .btn-generate:hover { border-color: var(--accent); background: var(--surface2); }
+  .btn-generate:active { background: var(--surface3); }
+  .btn-generate .prompt-sym { color: var(--accent2); margin-right: 10px; font-weight: 700; }
+
+  .btn-refresh {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-refresh:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── Notification ── */
+  #notif {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface3);
+    border: 1px solid var(--accent2);
+    color: var(--accent2);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 10px 18px;
+    border-radius: 8px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 999;
+  }
+  #notif.show { opacity: 1; transform: translateY(0); }
+
+  /* ── Capability pills ── */
+  .cap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .cap-pill {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .cap-pill .icon { font-size: 0.9rem; }
+  .cap-pill .cap-label { color: var(--text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .cap-pill .cap-val { color: var(--text-bright); font-family: var(--mono); font-size: 0.72rem; }
+  .cap-pill.ok .icon { color: var(--accent2); }
+  .cap-pill.warn .icon { color: var(--warn); }
+  .cap-pill.na .icon { color: var(--text-dim); }
+
+  /* ── Warning banners ── */
+  #warnings-area {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .warn-banner {
+    background: #1a1400;
+    border-left: 3px solid var(--warn);
+    border-bottom: 1px solid #2a2000;
+    padding: 10px 14px 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideDown 0.18s ease;
+  }
+  .warn-banner.info {
+    background: #0d1a14;
+    border-left-color: var(--accent2);
+  }
+  @keyframes slideDown {
+    from { opacity:0; transform: translateY(-6px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+  .warn-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+  .warn-body { flex: 1; min-width: 0; }
+  .warn-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--warn);
+    margin-bottom: 2px;
+  }
+  .warn-banner.info .warn-title { color: var(--accent2); }
+  .warn-msg {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .warn-msg strong { color: var(--text); }
+  .warn-actions { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+  .btn-undo {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(255,179,71,0.12);
+    color: var(--warn);
+    border: 1px solid rgba(255,179,71,0.3);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-undo:hover { background: rgba(255,179,71,0.22); }
+  .btn-dismiss {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: none;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .btn-dismiss:hover { color: var(--text); }
+  .warn-field-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    background: rgba(255,179,71,0.1);
+    color: var(--warn);
+    border: 1px solid rgba(255,179,71,0.25);
+    border-radius: 3px;
+    padding: 1px 5px;
+    margin: 0 2px;
+  }
+  .warn-banner.info .warn-field-chip {
+    background: rgba(0,255,136,0.08);
+    color: var(--accent2);
+    border-color: rgba(0,255,136,0.2);
+  }
+
+  /* ── Config annotation syntax ── */
+  #config-output .an-user    { color: #4a9eff; }   /* user selected */
+  #config-output .an-auto    { color: var(--warn); font-style: italic; }  /* auto-adjusted */
+  #config-output .an-derived { color: #4a6070; font-style: italic; }      /* derived */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="terminal-logo">
+    <span class="prompt-sym">~/$</span>hostapdcfg<span class="cursor"></span>
+  </div>
+  <p class="tagline">Generate driver-aware hostapd.conf for Linux access points</p>
+  <div class="header-badge">Debian 13 · nl80211</div>
+</header>
+
+<main>
+  <!-- ── LEFT PANEL ── -->
+  <div class="panel-left">
+
+    <!-- Interfaces / Library -->
+    <div class="section">
+      <div class="section-header">
+        <div class="dot"></div>
+        <span id="src-section-title">Wireless Interfaces</span>
+        <button class="btn-refresh" onclick="loadInterfaces()" style="margin-left:auto" id="btn-refresh-ifaces">↺ Refresh</button>
+      </div>
+      <div class="section-body">
+        <div class="src-tabs">
+          <button class="src-tab active" id="tab-detected" onclick="setSourceTab('detected')">Detected</button>
+          <button class="src-tab" id="tab-library" onclick="setSourceTab('library')">Driver Library</button>
+        </div>
+        <div id="iface-list">
+          <div class="no-ifaces">Scanning for interfaces…</div>
+        </div>
+        <div id="lib-list" style="display:none">
+          <input type="text" class="lib-search" id="lib-search" placeholder="Filter by chipset, vendor, driver…" oninput="renderLibrary()">
+          <div id="lib-groups"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detected capabilities -->
+    <div class="section" id="cap-section" style="display:none">
+      <div class="section-header"><div class="dot" style="background:var(--accent2)"></div>Detected Capabilities</div>
+      <div class="section-body">
+        <div class="cap-grid" id="cap-grid"></div>
+      </div>
+    </div>
+
+    <!-- Network -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:var(--accent3)"></div>Network Settings</div>
+      <div class="section-body">
+        <label><span>Interface name <em style="font-weight:300;text-transform:none">(used as <code>interface=</code> in hostapd.conf)</em></span>
+          <input type="text" id="iface_name" value="wlan0" maxlength="15" placeholder="wlan0">
+        </label>
+        <label><span>SSID</span><input type="text" id="ssid" value="MyAccessPoint" maxlength="32"></label>
+        <div class="row2">
+          <label><span>Band</span>
+            <select id="band" onchange="onBandChange()">
+              <option value="2.4GHz">2.4 GHz</option>
+              <option value="5GHz" selected>5 GHz</option>
+              <option value="6GHz">6 GHz</option>
+            </select>
+          </label>
+          <label><span>Channel</span>
+            <select id="channel"></select>
+          </label>
+        </div>
+        <div class="row2">
+          <label><span>Channel Width</span>
+            <select id="channel_width" onchange="onWidthChange()">
+              <option value="20">20 MHz</option>
+              <option value="40">40 MHz</option>
+              <option value="80" selected>80 MHz</option>
+              <option value="160">160 MHz</option>
+            </select>
+          </label>
+          <label><span>WiFi Gen</span>
+            <select id="wifi_gen">
+              <option value="4">WiFi 4 (802.11n)</option>
+              <option value="5">WiFi 5 (802.11ac)</option>
+              <option value="6">WiFi 6 (802.11ax)</option>
+              <option value="7">WiFi 7 (802.11be)</option>
+            </select>
+          </label>
+        </div>
+        <label><span>Country Code</span><input type="text" id="country" value="US" maxlength="2" style="text-transform:uppercase"></label>
+        <label><span>Bridge Interface <em style="font-weight:300;text-transform:none">(optional)</em></span>
+          <input type="text" id="bridge" placeholder="br0 — leave blank for no bridge">
+        </label>
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:var(--warn)"></div>Security</div>
+      <div class="section-body">
+        <label><span>Mode</span>
+          <select id="security" onchange="onSecurityChange()">
+            <option value="wpa2">WPA2-PSK (AES)</option>
+            <option value="wpa3-transition">WPA3-SAE Transition (WPA2+WPA3)</option>
+            <option value="wpa3">WPA3-SAE Only</option>
+            <option value="open">Open (no auth)</option>
+          </select>
+        </label>
+        <label id="pw-label"><span>Passphrase</span>
+          <input type="password" id="passphrase" value="MySecurePass1234" minlength="8" maxlength="63">
+          <span class="hint">8–63 characters</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- hostapd Backend -->
+    <div class="section" id="backend-section">
+      <div class="section-header"><div class="dot" style="background:#cc44ff"></div>hostapd Backend</div>
+      <div class="section-body">
+        <label><span>Backend binary</span>
+          <select id="backend" onchange="onBackendChange()"></select>
+        </label>
+        <div id="backend-desc" style="font-size:0.72rem;color:var(--text-dim);line-height:1.55;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+          Select a backend above.
+        </div>
+        <div id="backend-build" style="display:none">
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.06em">Build instructions</div>
+          <pre id="backend-build-code" style="font-family:var(--mono);font-size:0.68rem;color:#9db8cc;white-space:pre-wrap;background:var(--bg);padding:10px;border-radius:6px;border:1px solid var(--border)"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced -->
+    <div class="section">
+      <div class="section-header"><div class="dot" style="background:#9966ff"></div>Advanced</div>
+      <div class="section-body">
+        <div class="row2">
+          <label><span>Beacon Interval</span><input type="number" id="beacon_int" value="100" min="15" max="1000"><span class="hint">TUs (100 = 102.4 ms)</span></label>
+          <label><span>DTIM Period</span><input type="number" id="dtim_period" value="2" min="1" max="255"></label>
+        </div>
+        <div class="row2">
+          <label><span>Max Stations</span><input type="number" id="max_stations" value="32" min="1" max="255"></label>
+          <label><span>HE BSS Color</span><input type="number" id="he_bss_color" value="37" min="1" max="63"><span class="hint">WiFi 6 spatial reuse</span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Hidden SSID</div>
+            <div class="toggle-desc">Do not broadcast network name</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="hidden"><span class="slider"></span></label>
+        </div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Enable DFS (5 GHz)</div>
+            <div class="toggle-desc">Allow radar-protected channels — requires ieee80211h</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="enable_dfs"><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Additional Options (collapsible) -->
+    <details class="section" id="addl-section">
+      <summary class="section-header">
+        <div class="dot" style="background:#ffaa00"></div>
+        Additional Options
+        <span class="sub-tag">advanced</span>
+        <span class="chev">▶</span>
+      </summary>
+      <div class="section-body">
+
+        <details class="sub-section">
+          <summary>EAP / RADIUS (WPA Enterprise)<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Enable EAP / 802.1X</div>
+                <div class="toggle-desc">Replace PSK with WPA-EAP and add ieee8021x=1</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="eap_enabled"><span class="slider"></span></label>
+            </div>
+            <label><span>NAS identifier</span>
+              <input type="text" id="nas_identifier" placeholder="ap1.example.com">
+            </label>
+            <label><span>Auth server address</span>
+              <input type="text" id="radius_auth_addr" placeholder="10.0.0.1">
+            </label>
+            <div class="row2">
+              <label><span>Auth port</span><input type="number" id="radius_auth_port" value="1812" min="1" max="65535"></label>
+              <label><span>Auth shared secret</span><input type="password" id="radius_auth_secret" placeholder="changeme"></label>
+            </div>
+            <label><span>Accounting server <em style="font-weight:300;text-transform:none">(optional)</em></span>
+              <input type="text" id="radius_acct_addr" placeholder="10.0.0.1">
+            </label>
+            <div class="row2">
+              <label><span>Acct port</span><input type="number" id="radius_acct_port" value="1813" min="1" max="65535"></label>
+              <label><span>Acct shared secret</span><input type="password" id="radius_acct_secret"></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Inactivity & client maintenance<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <label><span>ap_max_inactivity <em style="font-weight:300;text-transform:none">(seconds, blank = hostapd default 300)</em></span>
+              <input type="number" id="ap_max_inactivity" placeholder="300" min="1" max="86400">
+            </label>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">disassoc_low_ack</div>
+                <div class="toggle-desc">Drop clients that fail many consecutive ACKs</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="disassoc_low_ack"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">skip_inactivity_poll</div>
+                <div class="toggle-desc">Don't probe idle clients with null-data frames</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="skip_inactivity_poll"><span class="slider"></span></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Client isolation & multicast<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">ap_isolate</div>
+                <div class="toggle-desc">Block client-to-client traffic at the AP (guest networks)</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="ap_isolate"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">multicast_to_unicast</div>
+                <div class="toggle-desc">Convert multicast frames to per-client unicast</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="multicast_to_unicast"><span class="slider"></span></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Roaming assistance (802.11k / 802.11v)<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">rrm_neighbor_report</div>
+                <div class="toggle-desc">802.11k: advertise neighbor APs to clients</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="rrm_neighbor_report"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">bss_transition</div>
+                <div class="toggle-desc">802.11v: BSS transition management for roaming</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="bss_transition"><span class="slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">time_advertisement</div>
+                <div class="toggle-desc">Advertise UTC time in beacons (802.11v)</div>
+              </div>
+              <label class="toggle"><input type="checkbox" id="time_advertisement"><span class="slider"></span></label>
+            </div>
+            <label><span>time_zone <em style="font-weight:300;text-transform:none">(POSIX TZ string)</em></span>
+              <input type="text" id="time_zone" placeholder="UTC0 or EST5EDT,M3.2.0,M11.1.0">
+            </label>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Vendor-specific information elements<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <div class="hint" style="line-height:1.5">
+              Each IE is built as <code>dd</code> · length · OUI (3 bytes) · OUI type (1 byte) · data.
+              Add one or more entries below — the hex is generated automatically.
+            </div>
+            <div id="vendor-ie-list"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn-add" onclick="addVendorIE()">+ Add IE</button>
+              <button type="button" class="btn-add" onclick="toggleVendorRaw()" id="btn-raw-toggle">Use raw hex…</button>
+            </div>
+            <div id="vendor-raw-wrap" style="display:none">
+              <label style="margin-top:6px"><span>Raw <code>vendor_elements=</code> hex <em style="font-weight:300;text-transform:none">(overrides the structured list)</em></span>
+                <input type="text" id="vendor_elements_raw" placeholder="dd05112233445566" oninput="updateVendorPreview()">
+              </label>
+            </div>
+            <div id="vendor-ie-preview-wrap" style="display:none">
+              <div class="hint" style="margin-top:4px">Generated hex (sent as <code>vendor_elements=</code>):</div>
+              <pre id="vendor-ie-preview" class="ie-preview"></pre>
+            </div>
+          </div>
+        </details>
+
+        <details class="sub-section">
+          <summary>Custom hostapd lines<span class="sub-chev">▶</span></summary>
+          <div class="sub-body">
+            <label><span>Free-form configuration</span>
+              <textarea id="custom_lines" rows="5" placeholder="# Lines added verbatim to the end of hostapd.conf
+# e.g. wmm_ac_be_aifs=3
+#      uapsd_advertisement_enabled=1"></textarea>
+              <span class="hint">No validation — use for parameters not exposed by the UI.</span>
+            </label>
+          </div>
+        </details>
+
+      </div>
+    </details>
+
+    <button class="btn-generate" onclick="generate()"><span class="prompt-sym">&gt;</span>generate hostapd.conf<span class="cursor"></span></button>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="panel-right">
+    <div id="warnings-area"></div>
+    <div class="output-header">
+      <h2>hostapd.conf Output</h2>
+      <div class="output-actions">
+        <button class="btn-copy" onclick="copyConfig()">⧉ Copy</button>
+        <button class="btn-dl" onclick="downloadConfig()">↓ Download</button>
+      </div>
+    </div>
+    <pre id="config-output"><span class="co"># Select an interface on the left and click Generate.</span></pre>
+  </div>
+</main>
+
+<div id="notif"></div>
+
+<script>
+let interfaces = [];
+let selectedIface = null;
+let currentConfig = '';
+let backends = {};
+let library = [];           // [{vendor, entries: [...]}]
+let sourceMode = 'detected'; // 'detected' | 'library'
+let selectedLibDriver = null;
+
+// Switch between "Detected" and "Driver Library" pickers
+function setSourceTab(mode) {
+  sourceMode = mode;
+  document.getElementById('tab-detected').classList.toggle('active', mode === 'detected');
+  document.getElementById('tab-library').classList.toggle('active', mode === 'library');
+  document.getElementById('iface-list').style.display = mode === 'detected' ? '' : 'none';
+  document.getElementById('lib-list').style.display   = mode === 'library'  ? '' : 'none';
+  document.getElementById('btn-refresh-ifaces').style.display = mode === 'detected' ? '' : 'none';
+  document.getElementById('src-section-title').textContent =
+    mode === 'detected' ? 'Wireless Interfaces' : 'Driver Library';
+
+  if (mode === 'detected' && interfaces.length) {
+    selectIface(interfaces[0]);
+  } else if (mode === 'library') {
+    if (selectedLibDriver) selectLibraryEntry(selectedLibDriver);
+    else if (library[0] && library[0].entries[0]) selectLibraryEntry(library[0].entries[0]);
+  }
+}
+
+async function loadLibrary() {
+  try {
+    const res = await fetch('/api/driver_library');
+    library = await res.json();
+    renderLibrary();
+  } catch (e) {
+    document.getElementById('lib-groups').innerHTML =
+      '<div class="no-ifaces">⚠ Could not load driver library.</div>';
+  }
+}
+
+function renderLibrary() {
+  const root = document.getElementById('lib-groups');
+  const q = (document.getElementById('lib-search').value || '').trim().toLowerCase();
+  root.innerHTML = '';
+  let any = false;
+  for (const grp of library) {
+    const matched = grp.entries.filter(e =>
+      !q ||
+      e.label.toLowerCase().includes(q) ||
+      e.driver.toLowerCase().includes(q) ||
+      grp.vendor.toLowerCase().includes(q)
+    );
+    if (!matched.length) continue;
+    any = true;
+    const wrap = document.createElement('div');
+    wrap.className = 'lib-vendor';
+    wrap.innerHTML = `<div class="lib-vendor-title">${esc(grp.vendor)}</div>`;
+    const list = document.createElement('div');
+    list.className = 'lib-list';
+    for (const e of matched) {
+      const card = document.createElement('div');
+      card.className = 'lib-card';
+      card.dataset.driver = e.driver;
+      const bus = (e.bus_types || []).join('/').toUpperCase() || '—';
+      const bands = (e.bands || []).join(', ');
+      const lar = e.iwlwifi_lar ? ' · LAR ⚠' : '';
+      card.innerHTML = `
+        <div class="lib-card-label">${esc(e.label)}</div>
+        <div class="lib-card-meta">${esc(e.driver)} · ${bus} · WiFi ${e.wifi_gen} · ${esc(bands)} · ≤${e.max_channel_width} MHz${lar}</div>
+      `;
+      card.onclick = () => selectLibraryEntry(e);
+      if (selectedLibDriver && selectedLibDriver.driver === e.driver) {
+        card.classList.add('selected');
+      }
+      list.appendChild(card);
+    }
+    wrap.appendChild(list);
+    root.appendChild(wrap);
+  }
+  if (!any) {
+    root.innerHTML = '<div class="no-ifaces">No chipsets match your filter.</div>';
+  }
+}
+
+// Build a synthetic iface object (matching the shape of /api/interfaces entries)
+// from a library entry, so the rest of the UI can treat it identically.
+function selectLibraryEntry(entry) {
+  selectedLibDriver = entry;
+  document.querySelectorAll('.lib-card').forEach(c =>
+    c.classList.toggle('selected', c.dataset.driver === entry.driver));
+
+  // Find the full capability record by faking the API shape a detected
+  // interface would expose. We only need the fields selectIface() reads.
+  const fakeCap = {
+    label:               entry.label,
+    wifi_gen:            entry.wifi_gen,
+    bus_types:           entry.bus_types,
+    bands:               entry.bands,
+    max_channel_width:   entry.max_channel_width,
+    he_capab:            entry.he_capab,
+    vht_capab:           entry.vht_capab,
+    eht_capab:           entry.eht_capab,
+    dfs:                 entry.dfs,
+    iwlwifi_lar:         entry.iwlwifi_lar,
+    recommended_backend: entry.recommended_backend,
+    ap_mode:             entry.ap_mode,
+    note:                entry.note,
+  };
+  const synthetic = {
+    interface:           document.getElementById('iface_name').value || 'wlan0',
+    driver:              entry.driver,
+    driver_label:        entry.label,
+    bus_type:            (entry.bus_types && entry.bus_types[0]) || 'unknown',
+    mac:                 '',
+    bands:               entry.bands || [],
+    ap_support:          entry.ap_mode !== false,
+    iwlwifi_lar:         !!entry.iwlwifi_lar,
+    recommended_backend: entry.recommended_backend || 'debian',
+    capabilities:        fakeCap,
+    from_library:        true,
+  };
+  selectIface(synthetic);
+}
+
+// ── Undo / warning state ─────────────────────────────────────────────────────
+// undoStack: array of { change, prevFormState }
+// prevFormState is a snapshot of form fields before the auto-adjustment
+let undoStack = [];
+let dismissedIds = new Set();  // IDs of warnings the user has dismissed
+
+// Capture current form state as a plain object
+function snapshotForm() {
+  return {
+    band:          document.getElementById('band').value,
+    channel:       document.getElementById('channel').value,
+    channel_width: document.getElementById('channel_width').value,
+    wifi_gen:      document.getElementById('wifi_gen').value,
+    security:      document.getElementById('security').value,
+    he_bss_color:  document.getElementById('he_bss_color').value,
+    backend:       document.getElementById('backend').value,
+  };
+}
+
+// Apply a form snapshot (used by undo)
+function applySnapshot(snap) {
+  if (snap.band)          document.getElementById('band').value = snap.band;
+  if (snap.channel_width) document.getElementById('channel_width').value = snap.channel_width;
+  if (snap.wifi_gen)      document.getElementById('wifi_gen').value = snap.wifi_gen;
+  if (snap.security)      document.getElementById('security').value = snap.security;
+  if (snap.he_bss_color)  document.getElementById('he_bss_color').value = snap.he_bss_color;
+  if (snap.backend)       document.getElementById('backend').value = snap.backend;
+  if (snap.band)          onBandChange().then(() => {
+    if (snap.channel) document.getElementById('channel').value = snap.channel;
+  });
+  onSecurityChange();
+  onBackendChange();
+}
+
+// Field display names for warning UI
+const FIELD_LABELS = {
+  wifi_gen:      'WiFi Generation',
+  band:          'Band',
+  channel:       'Channel',
+  channel_width: 'Channel Width',
+  security:      'Security Mode',
+  he_bss_color:  'HE BSS Color',
+  backend:       'hostapd Backend',
+  driver:        'Driver',
+};
+
+function fieldLabel(k) { return FIELD_LABELS[k] || k; }
+
+// ── Warning banner rendering ─────────────────────────────────────────────────
+function renderWarnings(changes) {
+  const area = document.getElementById('warnings-area');
+  area.innerHTML = '';
+
+  // Filter to only non-dismissed changes that modified a value
+  const visible = changes.filter(ch =>
+    ch.from_val !== ch.to_val && !dismissedIds.has(warningId(ch))
+  );
+
+  for (const ch of visible) {
+    const id = warningId(ch);
+    const isWarn = ch.severity === 'warning';
+    const div = document.createElement('div');
+    div.className = 'warn-banner' + (isWarn ? '' : ' info');
+    div.dataset.wid = id;
+
+    div.innerHTML = `
+      <div class="warn-icon">${isWarn ? '⚠' : 'ℹ'}</div>
+      <div class="warn-body">
+        <div class="warn-title">
+          ${isWarn ? 'Auto-adjusted:' : 'Auto-set:'}
+          <span class="warn-field-chip">${fieldLabel(ch.field)}</span>
+          changed from <span class="warn-field-chip">${esc(ch.from_val)}</span>
+          to <span class="warn-field-chip">${esc(ch.to_val)}</span>
+        </div>
+        <div class="warn-msg">
+          <strong>Why:</strong> ${esc(ch.reason)}
+          <br><strong>Triggered by:</strong>
+          <span class="warn-field-chip">${fieldLabel(ch.cause_field)}</span> = <span class="warn-field-chip">${esc(ch.cause_val)}</span>
+        </div>
+        <div class="warn-actions">
+          ${isWarn ? `<button class="btn-undo" onclick="undoChange('${id}')">↩ Undo this change</button>` : ''}
+          <button class="btn-dismiss" onclick="dismissWarning('${id}')">Dismiss</button>
+        </div>
+      </div>
+    `;
+    area.appendChild(div);
+  }
+}
+
+function warningId(ch) {
+  return `${ch.field}:${ch.from_val}:${ch.to_val}:${ch.cause_field}`;
+}
+
+function dismissWarning(id) {
+  dismissedIds.add(id);
+  const el = document.querySelector(`[data-wid="${id}"]`);
+  if (el) el.remove();
+}
+
+function undoChange(id) {
+  // Find the undo entry for this warning
+  const entry = undoStack.find(e => warningId(e.change) === id);
+  if (entry) {
+    applySnapshot(entry.prevFormState);
+    dismissedIds.add(id);  // dismiss the warning after undo
+    const el = document.querySelector(`[data-wid="${id}"]`);
+    if (el) el.remove();
+    notify('↩ Reverted change to ' + fieldLabel(entry.change.field));
+    // Re-generate with undone params
+    generate();
+  }
+}
+
+// ── Config rendering with annotation syntax highlighting ────────────────────
+function renderConfig(text) {
+  const el = document.getElementById('config-output');
+  el.innerHTML = text.split('\n').map(line => {
+    // Section headers
+    if (line.startsWith('#####')) {
+      return `<span class="hd">${esc(line)}</span>`;
+    }
+    // Pure comment lines
+    if (line.trimStart().startsWith('#')) {
+      return `<span class="co">${esc(line)}</span>`;
+    }
+    if (!line.includes('=')) return esc(line);
+
+    // Split at first = to get key and rest
+    const eqIdx = line.indexOf('=');
+    const key = line.substring(0, eqIdx);
+    const rest = line.substring(eqIdx + 1);
+
+    // Detect annotation: "  # ← ..."
+    const annMatch = rest.match(/^(.*?)(  # ← .*)$/);
+    let valPart, annPart;
+    if (annMatch) {
+      valPart = annMatch[1];
+      annPart = annMatch[2];
+    } else {
+      valPart = rest;
+      annPart = '';
+    }
+
+    let annHtml = '';
+    if (annPart) {
+      if (annPart.includes('AUTO-ADJUSTED')) {
+        annHtml = `<span class="an-auto">${esc(annPart)}</span>`;
+      } else if (annPart.includes('user selected')) {
+        annHtml = `<span class="an-user">${esc(annPart)}</span>`;
+      } else if (annPart.includes('derived')) {
+        annHtml = `<span class="an-derived">${esc(annPart)}</span>`;
+      } else {
+        annHtml = `<span class="co">${esc(annPart)}</span>`;
+      }
+    }
+
+    return `<span class="kw">${esc(key)}</span>=<span class="vl">${esc(valPart)}</span>${annHtml}`;
+  }).join('\n');
+}
+
+// ── Form helpers ─────────────────────────────────────────────────────────────
+async function loadInterfaces() {
+  const list = document.getElementById('iface-list');
+  list.innerHTML = '<div class="no-ifaces">Scanning…</div>';
+  try {
+    const res = await fetch('/api/interfaces');
+    interfaces = await res.json();
+    renderInterfaces();
+  } catch(e) {
+    list.innerHTML = '<div class="no-ifaces">⚠ Could not enumerate interfaces.<br>Run with sudo for full access.</div>';
+  }
+}
+
+function renderInterfaces() {
+  const list = document.getElementById('iface-list');
+  if (!interfaces.length) {
+    list.innerHTML = '<div class="no-ifaces">No wireless interfaces detected on this system.<br>'
+                   + 'Switch to <strong>Driver Library</strong> above to pick a chipset by name '
+                   + 'and generate a config for hardware you intend to use.</div>';
+    // Auto-switch to library mode so the user has something to do.
+    if (sourceMode === 'detected') setSourceTab('library');
+    return;
+  }
+  list.innerHTML = '';
+  for (const iface of interfaces) {
+    const cap = iface.capabilities;
+    const wifiGen = cap.wifi_gen || 4;
+    const apOk = iface.ap_support;
+    const busColor = iface.bus_type === 'pcie' ? '#9966ff' : iface.bus_type === 'usb' ? 'var(--accent)' : 'var(--text-dim)';
+    const busLabel = (iface.bus_type || 'unknown').toUpperCase();
+    const larWarn = iface.iwlwifi_lar ? '<span class="badge badge-noap">LAR ⚠</span>' : '';
+    const div = document.createElement('div');
+    div.className = 'iface-card';
+    div.dataset.iface = iface.interface;
+    div.innerHTML = `
+      <div class="iface-name">${iface.interface}</div>
+      <div class="iface-driver">${iface.driver_label}</div>
+      <div class="iface-badges">
+        <span class="badge" style="background:rgba(128,128,255,0.12);color:${busColor};border:1px solid ${busColor}44">${busLabel}</span>
+        <span class="badge badge-wifi">WiFi ${wifiGen}</span>
+        ${(iface.bands||[]).map(b => `<span class="badge badge-band">${b}</span>`).join('')}
+        ${!apOk ? '<span class="badge badge-noap">AP ⚠</span>' : ''}
+        ${larWarn}
+      </div>
+    `;
+    div.onclick = () => selectIface(iface);
+    list.appendChild(div);
+  }
+  if (interfaces.length) selectIface(interfaces[0]);
+}
+
+function selectIface(iface) {
+  selectedIface = iface;
+  document.querySelectorAll('.iface-card').forEach(c => c.classList.remove('selected'));
+  const card = document.querySelector(`.iface-card[data-iface="${iface.interface}"]`);
+  if (card) card.classList.add('selected');
+
+  // Sync the editable interface-name input. For detected interfaces we
+  // overwrite with the real kernel name; for library entries we leave any
+  // user-edited value intact and only seed the default 'wlan0' if empty.
+  const nameInput = document.getElementById('iface_name');
+  if (nameInput) {
+    if (iface.from_library) {
+      if (!nameInput.value) nameInput.value = 'wlan0';
+    } else {
+      nameInput.value = iface.interface;
+    }
+  }
+
+  const recBackend = iface.recommended_backend || 'debian';
+  const backendSel = document.getElementById('backend');
+  if (backendSel) backendSel.value = recBackend;
+  onBackendChange();
+
+  // Update cap grid
+  const cap = iface.capabilities;
+  const grid = document.getElementById('cap-grid');
+  document.getElementById('cap-section').style.display = 'block';
+  const wifiGen = cap.wifi_gen || 4;
+  const maxW = cap.max_channel_width || 20;
+  const hasHE = !!cap.he_capab;
+  const hasVHT = !!cap.vht_capab;
+  const hasDFS = !!cap.dfs;
+  const busType = (iface.bus_type || 'unknown').toUpperCase();
+  const hasLAR = !!cap.iwlwifi_lar;
+
+  grid.innerHTML = `
+    <div class="cap-pill ok"><span class="icon">📶</span><div><div class="cap-label">WiFi Gen</div><div class="cap-val">WiFi ${wifiGen}</div></div></div>
+    <div class="cap-pill ok"><span class="icon">🔌</span><div><div class="cap-label">Bus Type</div><div class="cap-val">${busType}</div></div></div>
+    <div class="cap-pill ${maxW>=80?'ok':'warn'}"><span class="icon">↔</span><div><div class="cap-label">Max Width</div><div class="cap-val">${maxW} MHz</div></div></div>
+    <div class="cap-pill ${hasHE?'ok':'na'}"><span class="icon">${hasHE?'✓':'✗'}</span><div><div class="cap-label">802.11ax (HE)</div><div class="cap-val">${hasHE?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasVHT?'ok':'na'}"><span class="icon">${hasVHT?'✓':'✗'}</span><div><div class="cap-label">802.11ac (VHT)</div><div class="cap-val">${hasVHT?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasDFS?'ok':'na'}"><span class="icon">${hasDFS?'✓':'✗'}</span><div><div class="cap-label">DFS Support</div><div class="cap-val">${hasDFS?'Yes':'No'}</div></div></div>
+    <div class="cap-pill ${hasLAR?'warn':'na'}"><span class="icon">${hasLAR?'⚠':'✓'}</span><div><div class="cap-label">Intel LAR</div><div class="cap-val">${hasLAR?'Active':'None'}</div></div></div>
+    <div class="cap-pill ok"><span class="icon">📻</span><div><div class="cap-label">Bands</div><div class="cap-val">${(iface.bands||['?']).join(', ')}</div></div></div>
+  `;
+  updateFormFromCap(cap, iface.bands || []);
+}
+
+function updateFormFromCap(cap, bands) {
+  const genSel = document.getElementById('wifi_gen');
+  const maxGen = cap.wifi_gen || 4;
+  Array.from(genSel.options).forEach(o => { o.disabled = parseInt(o.value) > maxGen; });
+  genSel.value = Math.min(maxGen, 6);
+
+  const widthSel = document.getElementById('channel_width');
+  const maxW = cap.max_channel_width || 20;
+  Array.from(widthSel.options).forEach(o => { o.disabled = parseInt(o.value) > maxW; });
+  const widths = [160,80,40,20].filter(w => w <= maxW);
+  widthSel.value = widths[0] || 20;
+
+  const bandSel = document.getElementById('band');
+  if (bands.includes('5GHz')) bandSel.value = '5GHz';
+  else if (bands.includes('6GHz')) bandSel.value = '6GHz';
+  else bandSel.value = '2.4GHz';
+  Array.from(bandSel.options).forEach(o => { o.disabled = !bands.includes(o.value); });
+
+  onBandChange();
+}
+
+async function onBandChange() {
+  const band = document.getElementById('band').value;
+  const isIwl = selectedIface && selectedIface.iwlwifi_lar;
+  const res = await fetch(`/api/channels?band=${band}&iwlwifi=${isIwl?'true':'false'}`);
+  const data = await res.json();
+  const chanSel = document.getElementById('channel');
+  chanSel.innerHTML = '';
+  for (const ch of data.channels) {
+    const opt = document.createElement('option');
+    opt.value = ch;
+    const isDfs = data.dfs_channels.includes(ch);
+    opt.textContent = `Ch ${ch}${isDfs?' (DFS)':''}`;
+    chanSel.appendChild(opt);
+  }
+  const defaults = {'2.4GHz':'6','5GHz':'36','6GHz':'1'};
+  chanSel.value = defaults[band] || chanSel.options[0]?.value;
+
+  const widthSel = document.getElementById('channel_width');
+  if (band === '2.4GHz') {
+    ['80','160'].forEach(v => {
+      const o = Array.from(widthSel.options).find(x=>x.value===v);
+      if(o) o.disabled = true;
+    });
+    if (parseInt(widthSel.value) > 40) widthSel.value = '40';
+  }
+}
+
+function onSecurityChange() {
+  const sec = document.getElementById('security').value;
+  document.getElementById('pw-label').style.display = sec === 'open' ? 'none' : 'flex';
+}
+
+async function loadBackends() {
+  try {
+    const res = await fetch('/api/backends');
+    backends = await res.json();
+    const sel = document.getElementById('backend');
+    sel.innerHTML = '';
+    for (const [key, b] of Object.entries(backends)) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = b.label + (b.available ? '' : ' ⚠ not found');
+      if (!b.available) opt.style.color = 'var(--warn)';
+      sel.appendChild(opt);
+    }
+    onBackendChange();
+  } catch(e) {}
+}
+
+function onBackendChange() {
+  const key = document.getElementById('backend').value;
+  const b = backends[key];
+  if (!b) return;
+  const desc = document.getElementById('backend-desc');
+  const buildDiv = document.getElementById('backend-build');
+  const buildCode = document.getElementById('backend-build-code');
+  desc.textContent = b.description || '';
+  desc.style.borderColor = b.available ? 'rgba(0,255,136,0.2)' : 'rgba(255,179,71,0.3)';
+  desc.style.color = b.available ? 'var(--text-dim)' : 'var(--warn)';
+  if (b.build_notes && !b.available) {
+    buildDiv.style.display = 'block';
+    buildCode.textContent = b.build_notes;
+  } else {
+    buildDiv.style.display = 'none';
+  }
+}
+
+// ── Main generate function ────────────────────────────────────────────────────
+async function generate() {
+  if (!selectedIface) { notify('⚠ Select an interface first'); return; }
+
+  // Snapshot the form state BEFORE we apply any changes (for undo)
+  const preSnap = snapshotForm();
+
+  const params = collectParams();
+
+  // Call generate (which also runs validate_and_resolve server-side)
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({...params, _orig: params})
+  });
+  const data = await res.json();
+  currentConfig = data.config;
+  const changes = data.changes || [];
+
+  // Build undo entries for each change that actually modified a user-set value
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      const id = warningId(ch);
+      // Only add if not already in undoStack for this id
+      if (!undoStack.find(e => warningId(e.change) === id)) {
+        undoStack.push({ change: ch, prevFormState: preSnap });
+      }
+    }
+  }
+
+  // Apply resolved values back to form (so the UI shows what was actually used)
+  applyResolvedToForm(data.changes || [], params);
+
+  // Clear dismissed state for any NEW changes
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      dismissedIds.delete(warningId(ch));
+    }
+  }
+
+  renderWarnings(changes);
+  renderConfig(currentConfig);
+}
+
+// ── Vendor IE editor ─────────────────────────────────────────────────────────
+let _ieCounter = 0;
+
+function addVendorIE(seed) {
+  _ieCounter += 1;
+  const id = `ie${_ieCounter}`;
+  const list = document.getElementById('vendor-ie-list');
+  const row = document.createElement('div');
+  row.className = 'ie-row';
+  row.dataset.id = id;
+  row.innerHTML = `
+    <div class="row3">
+      <label><span>OUI <em style="font-weight:300;text-transform:none">(3 bytes)</em></span>
+        <input type="text" class="ie-oui" placeholder="00:50:F2" maxlength="11" oninput="updateVendorPreview()">
+      </label>
+      <label><span>OUI Type</span>
+        <input type="text" class="ie-type" placeholder="04" maxlength="4" oninput="updateVendorPreview()">
+      </label>
+      <label><span>Data format</span>
+        <select class="ie-fmt" onchange="updateVendorPreview()">
+          <option value="hex">Hex</option>
+          <option value="text">Text (UTF-8)</option>
+        </select>
+      </label>
+    </div>
+    <label><span>Data</span>
+      <input type="text" class="ie-data" placeholder="01020304 or any hex/text" oninput="updateVendorPreview()">
+    </label>
+    <div class="ie-actions">
+      <span class="ie-byte-count">— bytes</span>
+      <button type="button" class="btn-remove" onclick="removeVendorIE('${id}')">Remove</button>
+    </div>
+  `;
+  list.appendChild(row);
+  if (seed) {
+    if (seed.oui)  row.querySelector('.ie-oui').value  = seed.oui;
+    if (seed.type) row.querySelector('.ie-type').value = seed.type;
+    if (seed.fmt)  row.querySelector('.ie-fmt').value  = seed.fmt;
+    if (seed.data) row.querySelector('.ie-data').value = seed.data;
+  }
+  updateVendorPreview();
+}
+
+function removeVendorIE(id) {
+  const row = document.querySelector(`.ie-row[data-id="${id}"]`);
+  if (row) row.remove();
+  updateVendorPreview();
+}
+
+function toggleVendorRaw() {
+  const wrap = document.getElementById('vendor-raw-wrap');
+  const btn  = document.getElementById('btn-raw-toggle');
+  const showing = wrap.style.display !== 'none';
+  wrap.style.display = showing ? 'none' : '';
+  btn.textContent    = showing ? 'Use raw hex…' : 'Hide raw hex';
+  if (showing) document.getElementById('vendor_elements_raw').value = '';
+  updateVendorPreview();
+}
+
+// Normalise a string to lowercase hex, stripping common separators.
+function _toHex(s) {
+  return (s || '').replace(/[\s:\-_]+/g, '').toLowerCase();
+}
+
+// Convert a UTF-8 text string to a hex byte string.
+function _textToHex(s) {
+  const bytes = new TextEncoder().encode(s);
+  let out = '';
+  for (const b of bytes) out += b.toString(16).padStart(2, '0');
+  return out;
+}
+
+// Build a single IE row's hex (or null if invalid/incomplete).
+// Also stamps the row with a byte-count annotation and an err class on overflow.
+function _buildIERow(row) {
+  const oui  = _toHex(row.querySelector('.ie-oui').value);
+  const type = _toHex((row.querySelector('.ie-type').value || '').replace(/^0x/i,''));
+  const fmt  = row.querySelector('.ie-fmt').value;
+  const data = row.querySelector('.ie-data').value || '';
+  const counter = row.querySelector('.ie-byte-count');
+
+  // Both empty → silently skip (incomplete row, not an error)
+  if (!oui && !type && !data) {
+    counter.textContent = '— bytes';
+    counter.classList.remove('err');
+    return null;
+  }
+
+  if (oui.length !== 6 || !/^[0-9a-f]+$/.test(oui)) {
+    counter.textContent = 'invalid OUI';
+    counter.classList.add('err');
+    return null;
+  }
+  if (type.length !== 2 || !/^[0-9a-f]+$/.test(type)) {
+    counter.textContent = 'invalid type';
+    counter.classList.add('err');
+    return null;
+  }
+
+  let dataHex = '';
+  if (fmt === 'hex') {
+    dataHex = _toHex(data);
+    if (!/^[0-9a-f]*$/.test(dataHex) || dataHex.length % 2 !== 0) {
+      counter.textContent = 'invalid hex data';
+      counter.classList.add('err');
+      return null;
+    }
+  } else {
+    dataHex = _textToHex(data);
+  }
+
+  const payload = oui + type + dataHex;          // bytes after the length field
+  const byteLen = payload.length / 2;
+  if (byteLen > 255) {
+    counter.textContent = `${byteLen} bytes — exceeds 255 limit`;
+    counter.classList.add('err');
+    return null;
+  }
+  counter.textContent = `${byteLen} bytes`;
+  counter.classList.remove('err');
+  const lenHex = byteLen.toString(16).padStart(2, '0');
+  return 'dd' + lenHex + payload;
+}
+
+// Walk the IE list (or use raw override) and return the full vendor_elements hex.
+function buildVendorElementsHex() {
+  const raw = (document.getElementById('vendor_elements_raw').value || '').trim();
+  if (raw) return _toHex(raw);
+  const rows = document.querySelectorAll('#vendor-ie-list .ie-row');
+  const parts = [];
+  for (const r of rows) {
+    const h = _buildIERow(r);
+    if (h) parts.push(h);
+  }
+  return parts.join('');
+}
+
+function updateVendorPreview() {
+  const hex = buildVendorElementsHex();
+  const wrap = document.getElementById('vendor-ie-preview-wrap');
+  const pre  = document.getElementById('vendor-ie-preview');
+  if (hex) {
+    wrap.style.display = '';
+    pre.textContent = hex;
+    pre.classList.remove('empty');
+  } else {
+    wrap.style.display = 'none';
+    pre.textContent = '';
+  }
+}
+
+function collectParams() {
+  const ifaceName = (document.getElementById('iface_name').value || '').trim() || 'wlan0';
+  return {
+    interface:     ifaceName,
+    driver:        selectedIface.driver,
+    from_library:  !!selectedIface.from_library,
+    ssid:          document.getElementById('ssid').value,
+    passphrase:    document.getElementById('passphrase').value,
+    band:          document.getElementById('band').value,
+    channel:       document.getElementById('channel').value,
+    channel_width: document.getElementById('channel_width').value,
+    wifi_gen:      document.getElementById('wifi_gen').value,
+    country:       document.getElementById('country').value.toUpperCase(),
+    bridge:        document.getElementById('bridge').value,
+    security:      document.getElementById('security').value,
+    hidden:        document.getElementById('hidden').checked,
+    max_stations:  document.getElementById('max_stations').value,
+    he_bss_color:  document.getElementById('he_bss_color').value,
+    beacon_int:    document.getElementById('beacon_int').value,
+    dtim_period:   document.getElementById('dtim_period').value,
+    enable_dfs:    document.getElementById('enable_dfs').checked,
+    backend:       document.getElementById('backend').value,
+
+    // Additional Options (advanced / uncommon)
+    eap_enabled:          document.getElementById('eap_enabled').checked,
+    nas_identifier:       document.getElementById('nas_identifier').value,
+    radius_auth_addr:     document.getElementById('radius_auth_addr').value,
+    radius_auth_port:     document.getElementById('radius_auth_port').value,
+    radius_auth_secret:   document.getElementById('radius_auth_secret').value,
+    radius_acct_addr:     document.getElementById('radius_acct_addr').value,
+    radius_acct_port:     document.getElementById('radius_acct_port').value,
+    radius_acct_secret:   document.getElementById('radius_acct_secret').value,
+    ap_max_inactivity:    document.getElementById('ap_max_inactivity').value,
+    disassoc_low_ack:     document.getElementById('disassoc_low_ack').checked,
+    skip_inactivity_poll: document.getElementById('skip_inactivity_poll').checked,
+    ap_isolate:           document.getElementById('ap_isolate').checked,
+    multicast_to_unicast: document.getElementById('multicast_to_unicast').checked,
+    rrm_neighbor_report:  document.getElementById('rrm_neighbor_report').checked,
+    bss_transition:       document.getElementById('bss_transition').checked,
+    time_advertisement:   document.getElementById('time_advertisement').checked,
+    time_zone:            document.getElementById('time_zone').value,
+    vendor_elements:      buildVendorElementsHex(),
+    custom_lines:         document.getElementById('custom_lines').value,
+  };
+}
+
+// Update form elements to reflect resolved values returned by the server
+function applyResolvedToForm(changes, origParams) {
+  // Map of field → resolved value from changes
+  const resolved = {};
+  for (const ch of changes) {
+    if (ch.from_val !== ch.to_val) {
+      resolved[ch.field] = ch.to_val;
+    }
+  }
+  if (resolved.wifi_gen)      document.getElementById('wifi_gen').value = resolved.wifi_gen;
+  if (resolved.channel_width) document.getElementById('channel_width').value = resolved.channel_width;
+  if (resolved.security) {
+    document.getElementById('security').value = resolved.security;
+    onSecurityChange();
+  }
+  if (resolved.he_bss_color)  document.getElementById('he_bss_color').value = resolved.he_bss_color;
+  if (resolved.backend) {
+    document.getElementById('backend').value = resolved.backend;
+    onBackendChange();
+  }
+  if (resolved.band) {
+    document.getElementById('band').value = resolved.band;
+    onBandChange().then(() => {
+      if (resolved.channel) document.getElementById('channel').value = resolved.channel;
+    });
+  } else if (resolved.channel) {
+    document.getElementById('channel').value = resolved.channel;
+  }
+}
+
+function warningId(ch) {
+  return `${ch.field}:${ch.from_val}:${ch.to_val}:${ch.cause_field}`;
+}
+
+function copyConfig() {
+  if (!currentConfig) return;
+  navigator.clipboard.writeText(currentConfig).then(() => notify('✓ Copied to clipboard'));
+}
+
+function downloadConfig() {
+  if (!currentConfig) return;
+  const blob = new Blob([currentConfig], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hostapd.conf';
+  a.click();
+  notify('↓ Downloading hostapd.conf');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+let notifTimer;
+function notify(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Init
+loadInterfaces();
+loadBackends();
+loadLibrary();
+onBandChange();
+addVendorIE();  // seed one empty IE row in the structured editor
+</script>
+
+</body>
+</html>
+
+"""
+
 
 # ── Hostapd backend registry ──────────────────────────────────────────────────
 HOSTAPD_BACKENDS = {
@@ -1309,7 +3124,7 @@ def _center_channel(primary, width):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return Response(INDEX_HTML, mimetype="text/html; charset=utf-8")
 
 
 @app.route("/api/interfaces")
@@ -1418,4 +3233,5 @@ def api_generate():
 
 
 if __name__ == "__main__":
+    print("hostapd Configurator — listening on http://0.0.0.0:5000  (Ctrl+C to quit)")
     app.run(host="0.0.0.0", port=5000, debug=False)
