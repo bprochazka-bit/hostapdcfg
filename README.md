@@ -68,7 +68,7 @@ Or simply copy the two files to any directory:
 
 ```
 hostapd-configurator/
-├── app.py
+├── hostapdcfg.py
 └── templates/
     └── index.html
 ```
@@ -82,12 +82,12 @@ No virtual environment is needed. No compiled extensions. No external CSS/JS fra
 The app reads `/sys/class/net`, runs `ethtool -i`, and calls `iw phy phyX info`, all of which require either root or a user with `CAP_NET_ADMIN`. The simplest approach:
 
 ```bash
-sudo python3 app.py
+sudo python3 hostapdcfg.py
 ```
 
 Then open **http://localhost:5000** in your browser.
 
-To bind to a specific address or port, edit the last line of `app.py`:
+To bind to a specific address or port, edit the last line of `hostapdcfg.py`:
 
 ```python
 app.run(host="0.0.0.0", port=5000, debug=False)
@@ -113,7 +113,7 @@ For each wireless interface found, it collects:
 
 ## Driver & Chipset Database
 
-The app maintains a capability database (`DRIVER_CAPABILITIES` in `app.py`) for 24 known Linux wireless drivers. Each entry specifies the correct `ht_capab` string, `vht_capab` string, maximum channel width, supported bands, HE/EHT support flags, DFS capability, recommended module parameters, and recommended hostapd backend.
+The app maintains a capability database (`DRIVER_CAPABILITIES` in `hostapdcfg.py`) for 24 known Linux wireless drivers. Each entry specifies the correct `ht_capab` string, `vht_capab` string, maximum channel width, supported bands, HE/EHT support flags, DFS capability, recommended module parameters, and recommended hostapd backend.
 
 ### Mediatek (USB)
 
@@ -200,7 +200,7 @@ This distinction matters because:
 
 ## Dependency Resolution
 
-When you click **Generate**, the app runs a ten-rule dependency resolver (`validate_and_resolve` in `app.py`) that evaluates your chosen parameters against hardware capabilities and protocol constraints. Rules run in order so that earlier coercions feed correctly into later checks.
+When you click **Generate**, the app runs a ten-rule dependency resolver (`validate_and_resolve` in `hostapdcfg.py`) that evaluates your chosen parameters against hardware capabilities and protocol constraints. Rules run in order so that earlier coercions feed correctly into later checks.
 
 ### Rule 1 — WiFi generation cap
 
@@ -398,7 +398,7 @@ The `vht_oper_centr_freq_seg0_idx` and `he_oper_centr_freq_seg0_idx` values are 
 - **80 MHz**: center = the center of the 80 MHz block containing the primary channel (e.g. channels 36–48 → center 42)
 - **160 MHz**: center = the center of the 160 MHz block containing the primary channel (e.g. channels 36–64 → center 50)
 
-The full lookup table is encoded in `_center_channel()` in `app.py`.
+The full lookup table is encoded in `_center_channel()` in `hostapdcfg.py`.
 
 ---
 
@@ -504,7 +504,7 @@ Description=hostapd Configurator
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /opt/hostapd-configurator/app.py
+ExecStart=/usr/bin/python3 /opt/hostapd-configurator/hostapdcfg.py
 WorkingDirectory=/opt/hostapd-configurator
 User=root
 Restart=on-failure
@@ -519,7 +519,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now hostapd-cfg
 ```
 
-The service binds to `0.0.0.0:5000` by default. If you want to restrict access to localhost only, change the `app.run()` call in `app.py` to `host="127.0.0.1"` and use an nginx or caddy reverse proxy for external access.
+The service binds to `0.0.0.0:5000` by default. If you want to restrict access to localhost only, change the `app.run()` call in `hostapdcfg.py` to `host="127.0.0.1"` and use an nginx or caddy reverse proxy for external access.
 
 ---
 
