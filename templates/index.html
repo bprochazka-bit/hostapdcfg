@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>hostapd Configurator</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0e14' rx='2'/><rect x='2' y='11' width='2' height='3' fill='%2300d4ff'/><rect x='5.5' y='8' width='2' height='6' fill='%2300d4ff'/><rect x='9' y='5' width='2' height='9' fill='%2300d4ff'/><rect x='12.5' y='2' width='2' height='12' fill='%2300d4ff'/></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@300;400;500;600&display=swap');
 
@@ -42,22 +43,33 @@
     padding: 16px 32px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
   }
-  .logo-icon {
-    width: 40px; height: 40px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-  }
-  header h1 {
-    font-size: 1.3rem;
+  .terminal-logo {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1.1rem;
     font-weight: 600;
-    color: var(--text-bright);
-    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
   }
-  header p {
+  .terminal-logo .prompt-sym {
+    color: var(--accent2);
+    margin-right: 8px;
+  }
+  .cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    background: var(--accent);
+    margin-left: 4px;
+    vertical-align: text-bottom;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  header .tagline {
     font-size: 0.8rem;
     color: var(--text-dim);
     font-weight: 300;
@@ -516,20 +528,22 @@
   /* ── Generate button ── */
   .btn-generate {
     width: 100%;
-    padding: 14px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border: none;
-    border-radius: 8px;
-    color: #000;
-    font-family: var(--sans);
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    padding: 14px 18px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.92rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .btn-generate:hover { opacity: 0.9; }
-  .btn-generate:active { transform: scale(0.99); }
+  .btn-generate:hover { border-color: var(--accent); background: var(--surface2); }
+  .btn-generate:active { background: var(--surface3); }
+  .btn-generate .prompt-sym { color: var(--accent2); margin-right: 10px; font-weight: 700; }
 
   .btn-refresh {
     background: none;
@@ -684,11 +698,10 @@
 <body>
 
 <header>
-  <div class="logo-icon">📡</div>
-  <div>
-    <h1>hostapd Configurator</h1>
-    <p>Generate driver-aware hostapd.conf for Linux access points</p>
+  <div class="terminal-logo">
+    <span class="prompt-sym">~/$</span>hostapdcfg<span class="cursor"></span>
   </div>
+  <p class="tagline">Generate driver-aware hostapd.conf for Linux access points</p>
   <div class="header-badge">Debian 13 · nl80211</div>
 </header>
 
@@ -988,7 +1001,7 @@
       </div>
     </details>
 
-    <button class="btn-generate" onclick="generate()">⚡ Generate hostapd.conf</button>
+    <button class="btn-generate" onclick="generate()"><span class="prompt-sym">&gt;</span>generate hostapd.conf<span class="cursor"></span></button>
   </div>
 
   <!-- ── RIGHT PANEL ── -->
