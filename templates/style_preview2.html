@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Style preview 2 — hostapd Configurator</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><polygon points='8,1 15,4.5 15,11.5 8,15 1,11.5 1,4.5' fill='%2300d4ff'/></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Press+Start+2P&display=swap');
+
+  :root {
+    --bg: #0a0e14;
+    --surface: #111820;
+    --surface2: #1a2330;
+    --surface3: #1f2d3d;
+    --border: #253245;
+    --accent: #00d4ff;
+    --accent2: #00ff88;
+    --text: #c9d8e8;
+    --text-dim: #637080;
+    --text-bright: #e8f4ff;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+    --pixel: 'Press Start 2P', 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 40px 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    color: var(--text-bright);
+    font-size: 1.6rem;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .lede {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+  .lede code { font-family: var(--mono); color: var(--accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 20px;
+    max-width: 1400px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-num {
+    background: var(--surface2);
+    padding: 10px 16px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-num strong { color: var(--text-bright); font-weight: 700; }
+  .card-vibe { font-size: 0.65rem; font-style: italic; color: var(--text-dim); }
+
+  .mock-header {
+    background: var(--surface);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    min-height: 72px;
+  }
+  .mock-header .titles h2 {
+    color: var(--text-bright);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .mock-header .titles p {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 300;
+  }
+
+  .mock-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .row-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .favicons {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+  }
+  .fav-16 { width: 16px; height: 16px; }
+  .fav-64 { width: 64px; height: 64px; image-rendering: pixelated; }
+  .fav-meta {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+  }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 6 — Hex tile
+     ───────────────────────────────────────────────────── */
+  .logo-6 {
+    width: 40px;
+    height: 44px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    display: flex; align-items: center; justify-content: center;
+    color: #0a0e14;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+  .btn-6 {
+    background: var(--accent);
+    color: #0a0e14;
+    border: none;
+    clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 10px 100%, 0 50%);
+    padding: 16px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .btn-6:hover { background: #00b8e0; }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 7 — Signal bars
+     ───────────────────────────────────────────────────── */
+  .logo-7 {
+    width: 40px;
+    height: 40px;
+    background: var(--surface3);
+    border-radius: 4px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 6px;
+  }
+  .logo-7 .bar {
+    width: 5px;
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .btn-7 {
+    background: var(--accent);
+    color: #0a0e14;
+    border: none;
+    border-radius: 4px;
+    padding: 14px;
+    padding-left: 24px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-7::before {
+    content: '';
+    position: absolute;
+    left: 8px; top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 16px;
+    background:
+      linear-gradient(to top, #0a0e14 0 25%, transparent 25% 100%) 0 0/2px 100%,
+      linear-gradient(to top, #0a0e14 0 50%, transparent 50% 100%) 3px 0/2px 100%,
+      linear-gradient(to top, #0a0e14 0 75%, transparent 75% 100%) 6px 0/2px 100%,
+      linear-gradient(to top, #0a0e14 0 100%, transparent 100%) 9px 0/2px 100%;
+    background-repeat: no-repeat;
+  }
+  .btn-7:hover { background: #00b8e0; }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 8 — Pixel art 8-bit
+     ───────────────────────────────────────────────────── */
+  .logo-8 {
+    width: 40px;
+    height: 40px;
+    background: var(--surface3);
+    border: 2px solid var(--accent);
+    image-rendering: pixelated;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .logo-8 svg { display: block; }
+  .btn-8 {
+    background: var(--accent);
+    color: #0a0e14;
+    border: none;
+    border-radius: 0;
+    padding: 14px;
+    font-family: var(--pixel);
+    font-size: 0.7rem;
+    font-weight: 400;
+    cursor: pointer;
+    width: 100%;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    box-shadow:
+      inset -3px -3px 0 0 rgba(0,0,0,0.25),
+      inset  3px  3px 0 0 rgba(255,255,255,0.25),
+      0 0 0 2px var(--bg),
+      0 0 0 4px var(--accent);
+    transition: transform 0.05s;
+  }
+  .btn-8:active { transform: translate(1px,1px); }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 9 — Schematic line art
+     ───────────────────────────────────────────────────── */
+  .logo-9 {
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-9 {
+    background: var(--surface3);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 4px;
+    padding: 14px 14px 14px 38px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    position: relative;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn-9::before {
+    content: '';
+    position: absolute;
+    left: 14px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='12' y1='2' x2='12' y2='14'/><polyline points='6,8 12,2 18,8'/><line x1='8' y1='14' x2='16' y2='14'/><line x1='10' y1='17' x2='14' y2='17'/><line x1='11' y1='20' x2='13' y2='20'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+  .btn-9:hover { background: var(--surface2); border-color: var(--accent); }
+
+  /* ─────────────────────────────────────────────────────
+     OPTION 10 — Halftone dot grid
+     ───────────────────────────────────────────────────── */
+  .logo-10 {
+    width: 40px;
+    height: 40px;
+    background: var(--surface3);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-10 {
+    background-color: var(--surface3);
+    background-image: radial-gradient(circle, rgba(0,212,255,0.18) 1.2px, transparent 1.6px);
+    background-size: 8px 8px;
+    background-position: 0 0;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+    transition: border-color 0.15s, background-color 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .btn-10:hover { border-color: var(--accent); background-color: var(--surface2); }
+</style>
+</head>
+<body>
+
+<h1>Style preview — options 6–10</h1>
+<p class="lede">
+  Continuation of the picker. Same dark palette, same layout — the only thing changing is the
+  shape language. Option 8 uses the <code>Press Start 2P</code> pixel font for the button so you
+  can see the full 8-bit treatment; everything else stays in the existing Space Grotesk / JetBrains Mono pair.
+</p>
+
+<div class="grid">
+
+  <!-- ───────────── OPTION 6 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>06 · Hex tile</strong>
+      <span class="card-vibe">hardware / engineering badge</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-6">h</div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-6">⚡ GENERATE HOSTAPD.CONF</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="8,1 15,4.5 15,11.5 8,15 1,11.5 1,4.5" fill="#00d4ff"/>
+            <text x="8" y="11.5" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700"
+                  fill="#0a0e14" text-anchor="middle">h</text>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="8,1 15,4.5 15,11.5 8,15 1,11.5 1,4.5" fill="#00d4ff"/>
+            <text x="8" y="11.5" font-family="JetBrains Mono, monospace" font-size="9" font-weight="700"
+                  fill="#0a0e14" text-anchor="middle">h</text>
+          </svg>
+          <span class="fav-meta">SVG · hex polygon</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 7 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>07 · Signal bars</strong>
+      <span class="card-vibe">networking / RF identity</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-7">
+        <div class="bar" style="height:8px"></div>
+        <div class="bar" style="height:14px"></div>
+        <div class="bar" style="height:20px"></div>
+        <div class="bar" style="height:26px"></div>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-7">Generate hostapd.conf</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <rect x="2"  y="11" width="2" height="3"  fill="#00d4ff"/>
+            <rect x="5.5" y="8" width="2" height="6"  fill="#00d4ff"/>
+            <rect x="9"  y="5" width="2" height="9"  fill="#00d4ff"/>
+            <rect x="12.5" y="2" width="2" height="12" fill="#00d4ff"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <rect x="2"  y="11" width="2" height="3"  fill="#00d4ff"/>
+            <rect x="5.5" y="8" width="2" height="6"  fill="#00d4ff"/>
+            <rect x="9"  y="5" width="2" height="9"  fill="#00d4ff"/>
+            <rect x="12.5" y="2" width="2" height="12" fill="#00d4ff"/>
+          </svg>
+          <span class="fav-meta">SVG · 4 ascending bars</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 8 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>08 · Pixel art 8-bit</strong>
+      <span class="card-vibe">retro / playful</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-8">
+        <svg width="32" height="32" viewBox="0 0 16 16" shape-rendering="crispEdges">
+          <!-- 16x16 pixel-art wifi icon: dot + 3 ascending arcs -->
+          <rect x="7" y="13" width="2" height="2" fill="#00d4ff"/>
+          <rect x="5" y="10" width="2" height="2" fill="#00d4ff"/>
+          <rect x="9" y="10" width="2" height="2" fill="#00d4ff"/>
+          <rect x="3" y="7"  width="2" height="2" fill="#00d4ff"/>
+          <rect x="7" y="7"  width="2" height="2" fill="#00d4ff"/>
+          <rect x="11" y="7" width="2" height="2" fill="#00d4ff"/>
+          <rect x="1" y="4"  width="2" height="2" fill="#00d4ff"/>
+          <rect x="5" y="4"  width="2" height="2" fill="#00d4ff"/>
+          <rect x="9" y="4"  width="2" height="2" fill="#00d4ff"/>
+          <rect x="13" y="4" width="2" height="2" fill="#00d4ff"/>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-8">GENERATE</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <rect x="7" y="13" width="2" height="2" fill="#00d4ff"/>
+            <rect x="5" y="10" width="2" height="2" fill="#00d4ff"/>
+            <rect x="9" y="10" width="2" height="2" fill="#00d4ff"/>
+            <rect x="3" y="7"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="7" y="7"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="11" y="7" width="2" height="2" fill="#00d4ff"/>
+            <rect x="1" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="5" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="9" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="13" y="4" width="2" height="2" fill="#00d4ff"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14"/>
+            <rect x="7" y="13" width="2" height="2" fill="#00d4ff"/>
+            <rect x="5" y="10" width="2" height="2" fill="#00d4ff"/>
+            <rect x="9" y="10" width="2" height="2" fill="#00d4ff"/>
+            <rect x="3" y="7"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="7" y="7"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="11" y="7" width="2" height="2" fill="#00d4ff"/>
+            <rect x="1" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="5" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="9" y="4"  width="2" height="2" fill="#00d4ff"/>
+            <rect x="13" y="4" width="2" height="2" fill="#00d4ff"/>
+          </svg>
+          <span class="fav-meta">SVG · 16×16 pixel sprite</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 9 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>09 · Schematic line art</strong>
+      <span class="card-vibe">EE / circuit-diagram</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-9">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="2" x2="12" y2="13"/>
+          <polyline points="6,8 12,2 18,8"/>
+          <line x1="7" y1="14" x2="17" y2="14"/>
+          <line x1="9" y1="17" x2="15" y2="17"/>
+          <line x1="11" y1="20" x2="13" y2="20"/>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-9">Generate hostapd.conf</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <line x1="8" y1="2"  x2="8"  y2="9"  stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <polyline points="4,6 8,2 12,6" stroke="#00d4ff" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="5" y1="10" x2="11" y2="10" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <line x1="6" y1="12" x2="10" y2="12" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <line x1="7" y1="14" x2="9"  y2="14" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <line x1="8" y1="2"  x2="8"  y2="9"  stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <polyline points="4,6 8,2 12,6" stroke="#00d4ff" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="5" y1="10" x2="11" y2="10" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <line x1="6" y1="12" x2="10" y2="12" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+            <line x1="7" y1="14" x2="9"  y2="14" stroke="#00d4ff" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span class="fav-meta">SVG · antenna symbol</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── OPTION 10 ───────────── -->
+  <div class="card">
+    <div class="card-num"><strong>10 · Halftone dot grid</strong>
+      <span class="card-vibe">textured but minimal</span>
+    </div>
+    <div class="mock-header">
+      <div class="logo-10">
+        <svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+          <!-- lowercase 'h' from a 5x5 dot grid (5px spacing, 1.8px radius) -->
+          <g fill="#00d4ff">
+            <circle cx="4"  cy="4"  r="1.6"/>
+            <circle cx="4"  cy="9"  r="1.6"/>
+            <circle cx="4"  cy="14" r="1.6"/>
+            <circle cx="4"  cy="19" r="1.6"/>
+            <circle cx="4"  cy="24" r="1.6"/>
+            <circle cx="9"  cy="14" r="1.6"/>
+            <circle cx="14" cy="14" r="1.6"/>
+            <circle cx="14" cy="19" r="1.6"/>
+            <circle cx="14" cy="24" r="1.6"/>
+          </g>
+        </svg>
+      </div>
+      <div class="titles">
+        <h2>hostapd Configurator</h2>
+        <p>Generate driver-aware hostapd.conf for Linux access points</p>
+      </div>
+    </div>
+    <div class="mock-body">
+      <div>
+        <div class="row-label">Generate button</div>
+        <button class="btn-10">⚡ Generate hostapd.conf</button>
+      </div>
+      <div>
+        <div class="row-label">Favicon</div>
+        <div class="favicons">
+          <svg class="fav-16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <g fill="#00d4ff">
+              <circle cx="3"  cy="3"  r="1.1"/>
+              <circle cx="3"  cy="6"  r="1.1"/>
+              <circle cx="3"  cy="9"  r="1.1"/>
+              <circle cx="3"  cy="12" r="1.1"/>
+              <circle cx="6"  cy="9"  r="1.1"/>
+              <circle cx="9"  cy="9"  r="1.1"/>
+              <circle cx="9"  cy="12" r="1.1"/>
+              <circle cx="12" cy="9"  r="1.1"/>
+              <circle cx="12" cy="12" r="1.1"/>
+            </g>
+          </svg>
+          <svg class="fav-64" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <rect width="16" height="16" fill="#0a0e14" rx="2"/>
+            <g fill="#00d4ff">
+              <circle cx="3"  cy="3"  r="1.1"/>
+              <circle cx="3"  cy="6"  r="1.1"/>
+              <circle cx="3"  cy="9"  r="1.1"/>
+              <circle cx="3"  cy="12" r="1.1"/>
+              <circle cx="6"  cy="9"  r="1.1"/>
+              <circle cx="9"  cy="9"  r="1.1"/>
+              <circle cx="9"  cy="12" r="1.1"/>
+              <circle cx="12" cy="9"  r="1.1"/>
+              <circle cx="12" cy="12" r="1.1"/>
+            </g>
+          </svg>
+          <span class="fav-meta">SVG · dot-grid 'h'</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="margin-top:32px;color:var(--text-dim);font-size:0.8rem">
+  When you're ready, give me the option number (or mix-and-match — e.g.
+  "logo from #7, button from #1") and I'll wire it into the live app.
+</p>
+
+</body>
+</html>

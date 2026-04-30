@@ -1314,8 +1314,14 @@ def index():
 
 @app.route("/preview")
 def style_preview():
-    """Visual mockups of candidate logo / Generate-button / favicon styles."""
+    """Visual mockups of candidate logo / Generate-button / favicon styles (1–5)."""
     return render_template("style_preview.html")
+
+
+@app.route("/preview2")
+def style_preview2():
+    """Visual mockups of candidate logo / Generate-button / favicon styles (6–10)."""
+    return render_template("style_preview2.html")
 
 
 @app.route("/api/interfaces")
